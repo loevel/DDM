@@ -1,5 +1,5 @@
-/boutique   /boutique.html  200
-/location   /location.html  200
-/histoire   /notre-histoire.html  200
-/guide      /guide-entretien.html 200
-/accessoires /accessoires.html 200
+# Cloudflare Pages gère /boutique → boutique.html automatiquement (Pretty URLs)
+# Ces règles couvrent uniquement les alias alternatifs
+
+/histoire        /notre-histoire  308
+/guide           /guide-entretien 308

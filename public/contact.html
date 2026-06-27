@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Contactez-nous | DDM Wigs &amp; More</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:wght@400;700&amp;family=Manrope:wght@300;400;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "surface-dim": "#dcd9d9",
+                        "secondary-fixed": "#e1e6c2",
+                        "outline-variant": "#d4c4b7",
+                        "on-tertiary": "#ffffff",
+                        "on-secondary-container": "#62674a",
+                        "on-primary": "#ffffff",
+                        "on-surface": "#1b1c1c",
+                        "on-primary-fixed-variant": "#623f18",
+                        "tertiary": "#625f4f",
+                        "on-tertiary-fixed-variant": "#4a4738",
+                        "error": "#ba1a1a",
+                        "surface-variant": "#e4e2e1",
+                        "secondary-fixed-dim": "#c5c9a7",
+                        "inverse-on-surface": "#f3f0f0",
+                        "error-container": "#ffdad6",
+                        "outline": "#82756a",
+                        "surface-container-highest": "#e4e2e1",
+                        "inverse-surface": "#303030",
+                        "surface-bright": "#fcf9f8",
+                        "primary-fixed": "#ffdcbd",
+                        "surface-container": "#f0eded",
+                        "on-primary-container": "#5b3912",
+                        "on-error-container": "#93000a",
+                        "on-tertiary-fixed": "#1e1c10",
+                        "surface-container-lowest": "#ffffff",
+                        "secondary-container": "#e1e6c2",
+                        "on-secondary-fixed-variant": "#45492f",
+                        "primary": "#7d562d",
+                        "on-tertiary-container": "#444133",
+                        "primary-fixed-dim": "#f0bd8b",
+                        "tertiary-fixed-dim": "#ccc6b3",
+                        "secondary": "#5c6145",
+                        "on-surface-variant": "#50453b",
+                        "background": "#fcf9f8",
+                        "surface-container-low": "#f6f3f2",
+                        "tertiary-fixed": "#e8e2cf",
+                        "surface": "#fcf9f8",
+                        "on-secondary-fixed": "#1a1d07",
+                        "on-background": "#1b1c1c",
+                        "surface-tint": "#7d562d",
+                        "tertiary-container": "#b2ad9b",
+                        "on-error": "#ffffff",
+                        "on-primary-fixed": "#2c1600",
+                        "surface-container-high": "#eae7e7",
+                        "on-secondary": "#ffffff",
+                        "inverse-primary": "#f0bd8b",
+                        "primary-container": "#d4a373"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.125rem",
+                        "lg": "0.25rem",
+                        "xl": "0.5rem",
+                        "full": "0.75rem"
+                    },
+                    "spacing": {
+                        "grid-gutter": "24px",
+                        "container-max-width": "1440px",
+                        "grid-margin-desktop": "80px",
+                        "base": "8px",
+                        "section-gap-mobile": "64px",
+                        "section-gap-desktop": "120px"
+                    },
+                    "fontFamily": {
+                        "headline-md": ["Libre Caslon Text"],
+                        "headline-lg-mobile": ["Libre Caslon Text"],
+                        "label-md": ["Manrope"],
+                        "body-lg": ["Manrope"],
+                        "headline-xl": ["Libre Caslon Text"],
+                        "headline-lg": ["Libre Caslon Text"],
+                        "body-md": ["Manrope"]
+                    },
+                    "fontSize": {
+                        "headline-md": ["24px", {"lineHeight": "1.4", "fontWeight": "400"}],
+                        "headline-lg-mobile": ["28px", {"lineHeight": "1.3", "fontWeight": "400"}],
+                        "label-md": ["14px", {"lineHeight": "1.2", "letterSpacing": "0.05em", "fontWeight": "600"}],
+                        "body-lg": ["18px", {"lineHeight": "1.6", "fontWeight": "400"}],
+                        "headline-xl": ["48px", {"lineHeight": "1.2", "letterSpacing": "-0.02em", "fontWeight": "400"}],
+                        "headline-lg": ["32px", {"lineHeight": "1.3", "fontWeight": "400"}],
+                        "body-md": ["16px", {"lineHeight": "1.6", "fontWeight": "400"}]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body {
+            font-family: 'Manrope', sans-serif;
+            -webkit-font-smoothing: antialiased;
+        }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24;
+        }
+        .input-elegant {
+            border: none;
+            border-bottom: 1px solid #d4c4b7;
+            background: transparent;
+            border-radius: 0;
+            padding-left: 0;
+            transition: border-color 0.3s ease;
+        }
+        .input-elegant:focus {
+            outline: none;
+            box-shadow: none;
+            border-color: #7d562d;
+        }
+        .luxury-gradient {
+            background: linear-gradient(135deg, #fcf9f8 0%, #f0eded 100%);
+        }
+    </style>
+</head>
+<body class="bg-background text-on-surface selection:bg-primary-container selection:text-on-primary-container">
+<!-- TopNavBar -->
+<header class="fixed top-0 w-full z-50 bg-surface dark:bg-surface-container-highest border-b border-outline-variant dark:border-outline h-20 flex items-center">
+<nav class="flex justify-between items-center w-full px-grid-margin-desktop max-w-container-max-width mx-auto">
+<!-- Brand Logo -->
+<a class="font-headline-md text-headline-md text-primary dark:text-primary-fixed-dim tracking-tight" href="#">
+                DDM Wigs &amp; More
+            </a>
+<!-- Navigation Links -->
+<div class="hidden md:flex gap-10">
+<a class="font-label-md text-label-md text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="/boutique">Shop Wigs</a>
+<a class="font-label-md text-label-md text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="/location">Rentals</a>
+<a class="font-label-md text-label-md text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="/accessoires">Accessories</a>
+<a class="font-label-md text-label-md text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="/notre-histoire">Our Story</a>
+<a class="font-label-md text-label-md text-on-surface-variant dark:text-surface-variant hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="/guide-entretien">Care Guide</a>
+</div>
+<!-- Actions -->
+<div class="flex items-center gap-6">
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">search</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">person</button>
+<button class="material-symbols-outlined text-on-surface-variant hover:text-primary transition-colors">shopping_bag</button>
+</div>
+</nav>
+</header>
+<main class="pt-20">
+<!-- Hero / Introductory Section -->
+<section class="relative h-[614px] flex items-center justify-center overflow-hidden">
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full bg-cover bg-center transition-transform duration-[10s] hover:scale-110" data-alt="A high-fashion, editorial-style close-up of flowing, luxurious chestnut-colored human hair. The lighting is soft and cinematic, highlighting the silky texture and healthy shine. The background is a minimalist, warm cream-toned studio setting, evoking a sense of premium artistry and sophisticated salon quality. The mood is serene, expensive, and professional." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB7rScq-XYyeC3Ypz_yDaUUWcT7cqyxXVpzMDxsBIFJLClVJYGzkSOosqD5bZNBL3Y3wLJjIORpXM9_OKZjZaeDtOHaAF2i9o9i8iMNuYCnAiB6V23VGogrQvgE9Q7VY1oWk9uQSgA1jUmAgL_ldjlHR57ELiYIw6fk84kEU8iGVI4FHNe3PluBNBqHd6ehc57AmLKrwQKrwEV5aSo84fK_flyju-d6P9b30YmpNUiOCqV8XI1WgmrCTAXSv698kX05nBeSmyn_D0Y')">
+</div>
+<div class="absolute inset-0 bg-white/20 backdrop-blur-[2px]"></div>
+</div>
+<div class="relative z-10 text-center px-4">
+<h1 class="font-headline-xl text-headline-xl text-on-surface mb-4 tracking-tight">Contactez-nous</h1>
+<p class="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto">
+                    Une consultation personnalisée pour sublimer votre allure. Nos experts sont à votre disposition pour vous accompagner dans le choix de votre chevelure idéale.
+                </p>
+</div>
+</section>
+<!-- Contact Section -->
+<section class="py-section-gap-desktop max-w-container-max-width mx-auto px-grid-margin-desktop">
+<div class="grid grid-cols-1 lg:grid-cols-2 gap-grid-gutter lg:gap-32">
+<!-- Left: Contact Information -->
+<div class="flex flex-col space-y-12 order-2 lg:order-1">
+<div>
+<h2 class="font-headline-lg text-headline-lg text-primary mb-8">Boutique Montréal</h2>
+<div class="space-y-6">
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary mt-1">location_on</span>
+<div>
+<p class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-1">Adresse</p>
+<p class="font-body-md text-body-md">1234 Rue Sherbrooke Ouest,<br/>Montréal, QC H3G 1G1, Canada</p>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary mt-1">call</span>
+<div>
+<p class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-1">Téléphone</p>
+<a class="font-body-md text-body-md hover:text-primary transition-colors" href="tel:+15145550199">+1 (514) 555-0199</a>
+</div>
+</div>
+<div class="flex items-start gap-4">
+<span class="material-symbols-outlined text-primary mt-1">mail</span>
+<div>
+<p class="font-label-md text-label-md uppercase tracking-wider text-on-surface-variant mb-1">Email</p>
+<a class="font-body-md text-body-md hover:text-primary transition-colors" href="mailto:contact@ddmwigs.ca">contact@ddmwigs.ca</a>
+</div>
+</div>
+</div>
+</div>
+<div class="pt-8 border-t border-outline-variant">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-6">Heures d'ouverture</h3>
+<ul class="space-y-3 font-body-md text-body-md">
+<li class="flex justify-between max-w-xs">
+<span class="text-on-surface-variant">Lun - Ven</span>
+<span class="font-semibold text-primary">10h - 18h</span>
+</li>
+<li class="flex justify-between max-w-xs">
+<span class="text-on-surface-variant">Samedi</span>
+<span class="font-semibold text-primary">11h - 17h</span>
+</li>
+<li class="flex justify-between max-w-xs">
+<span class="text-on-surface-variant">Dimanche</span>
+<span class="text-error italic">Fermé</span>
+</li>
+</ul>
+</div>
+<!-- Map Placeholder -->
+<div class="w-full h-80 rounded-lg overflow-hidden grayscale hover:grayscale-0 transition-all duration-700 shadow-sm border border-outline-variant">
+<div class="w-full h-full bg-surface-container" data-location="Montréal" style="">
+<div class="w-full h-full flex items-center justify-center text-on-surface-variant opacity-50">
+<span class="material-symbols-outlined text-4xl">map</span>
+</div>
+</div>
+</div>
+</div>
+<!-- Right: Contact Form -->
+<div class="order-1 lg:order-2">
+<div class="bg-surface p-10 lg:p-14 border border-outline-variant shadow-sm relative overflow-hidden group">
+<div class="absolute top-0 right-0 w-32 h-32 bg-primary/5 rounded-full -mr-16 -mt-16 transition-transform duration-500 group-hover:scale-150"></div>
+<h2 class="font-headline-lg text-headline-lg text-on-surface mb-2">Envoyez-nous un message</h2>
+<p class="font-body-md text-body-md text-on-surface-variant mb-12">Remplissez le formulaire ci-dessous et notre équipe vous répondra dans les plus brefs délais.</p>
+<form class="space-y-8" id="contactForm">
+<div class="relative">
+<input class="peer w-full input-elegant font-body-md text-body-md pt-4 pb-2" id="nom" name="nom" placeholder=" " required="" type="text"/>
+<label class="absolute left-0 top-4 text-on-surface-variant font-label-md text-label-md transition-all duration-300 peer-focus:-top-2 peer-focus:text-primary peer-[:not(:placeholder-shown)]:-top-2" for="nom">Nom</label>
+</div>
+<div class="relative">
+<input class="peer w-full input-elegant font-body-md text-body-md pt-4 pb-2" id="email" name="email" placeholder=" " required="" type="email"/>
+<label class="absolute left-0 top-4 text-on-surface-variant font-label-md text-label-md transition-all duration-300 peer-focus:-top-2 peer-focus:text-primary peer-[:not(:placeholder-shown)]:-top-2" for="email">Email</label>
+</div>
+<div class="relative">
+<input class="peer w-full input-elegant font-body-md text-body-md pt-4 pb-2" id="tel" name="tel" placeholder=" " type="tel"/>
+<label class="absolute left-0 top-4 text-on-surface-variant font-label-md text-label-md transition-all duration-300 peer-focus:-top-2 peer-focus:text-primary peer-[:not(:placeholder-shown)]:-top-2" for="tel">Téléphone</label>
+</div>
+<div class="relative">
+<select class="peer w-full input-elegant font-body-md text-body-md pt-4 pb-2 appearance-none cursor-pointer" id="sujet" name="sujet">
+<option disabled="" selected="" value=""></option>
+<option value="conseil">Conseil personnalisé</option>
+<option value="rendez-vous">Prendre rendez-vous</option>
+<option value="commande">Suivi de commande</option>
+<option value="autre">Autre demande</option>
+</select>
+<label class="absolute left-0 top-4 text-on-surface-variant font-label-md text-label-md transition-all duration-300 peer-focus:-top-2 peer-focus:text-primary peer-[:not(:placeholder-shown)]:-top-2" for="sujet">Sujet</label>
+<span class="material-symbols-outlined absolute right-0 bottom-2 pointer-events-none text-on-surface-variant">expand_more</span>
+</div>
+<div class="relative">
+<textarea class="peer w-full input-elegant font-body-md text-body-md pt-4 pb-2 resize-none" id="message" name="message" placeholder=" " required="" rows="4"></textarea>
+<label class="absolute left-0 top-4 text-on-surface-variant font-label-md text-label-md transition-all duration-300 peer-focus:-top-2 peer-focus:text-primary peer-[:not(:placeholder-shown)]:-top-2" for="message">Message</label>
+</div>
+<button class="w-full bg-primary text-on-primary font-label-md text-label-md py-4 px-8 uppercase tracking-widest hover:bg-on-primary-container transition-all duration-300 transform active:scale-[0.98] mt-4 flex items-center justify-center gap-2 group" type="submit">
+                                Envoyer le message
+                                <span class="material-symbols-outlined text-sm transition-transform duration-300 group-hover:translate-x-1">arrow_forward</span>
+</button>
+</form>
+</div>
+</div>
+</div>
+</section>
+<!-- Aesthetic Texture Section -->
+<section class="h-96 relative overflow-hidden flex items-center justify-center">
+<div class="absolute inset-0 z-0">
+<div class="w-full h-full bg-cover bg-fixed bg-center" data-alt="A minimalist, macro photograph of high-end silk fabric in a soft sand color. The fabric is draped in gentle, organic waves that mimic the natural flow of beautiful hair. The lighting is diffused and ethereal, creating subtle highlights and deep, velvety shadows. The overall aesthetic is one of quiet luxury, tactile comfort, and refined elegance, perfectly aligned with the brand's sophisticated identity." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAa1qx-wHT2dv8Wa_5NCqIlRpueo_7vrV1u2_k4QknFdK4Q3zlAhwEFKcf8ofgSB3CzHSvVqdBD_2NeEoC3Rhe1dGDdu4F_e5IZrPblWMDb5OyK0rS1_B6IqP4uQBvDYYiczr-qUhWYKaL7o2MGD4yDvRvNzD4et3v91d93J7Jmc3HEMPE9qzCFUBxFrpgUI69g5e9Pj3SPrc3AUOlzSY7tMiVKsZ8ZxbTnH0zyLH4CgxRwcFnt5l8ZfCXN0FFx05bL1tRob8BxyPQ')">
+</div>
+</div>
+<div class="relative z-10 text-center px-4">
+<blockquote class="font-headline-md text-headline-md italic text-primary max-w-xl mx-auto">
+                    "La beauté commence au moment où vous décidez d'être vous-même."
+                </blockquote>
+</div>
+</section>
+</main>
+<!-- Footer -->
+<footer class="bg-surface-container dark:bg-surface-container-lowest w-full border-t border-outline-variant">
+<div class="flex flex-col items-center py-section-gap-desktop px-grid-margin-desktop max-w-container-max-width mx-auto gap-8">
+<div class="font-headline-md text-headline-md text-on-surface dark:text-inverse-on-surface tracking-tight">
+                DDM Wigs &amp; More
+            </div>
+<div class="flex flex-wrap justify-center gap-x-8 gap-y-4 font-label-md text-label-md text-on-surface-variant dark:text-surface-variant">
+<a class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="/confidentialite">Privacy Policy</a>
+<a class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="#">Terms of Service</a>
+<a class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="/livraison">Shipping &amp; Returns</a>
+<a class="hover:text-primary dark:hover:text-primary-fixed-dim transition-colors duration-200" href="/contact">Contact Us</a>
+</div>
+<div class="flex gap-6 items-center">
+<a class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center hover:bg-primary hover:text-on-primary transition-all duration-300" href="#">
+<span class="material-symbols-outlined">public</span>
+</a>
+<a class="w-10 h-10 rounded-full border border-outline-variant flex items-center justify-center hover:bg-primary hover:text-on-primary transition-all duration-300" href="#">
+<span class="material-symbols-outlined">camera</span>
+</a>
+</div>
+<div class="font-body-md text-body-md text-on-surface-variant/60 text-center">
+                © 2024 DDM Wigs &amp; More. All prices in $CAD.
+            </div>
+</div>
+</footer>
+<script>
+        // Micro-interaction for form submission
+        document.getElementById('contactForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button');
+            const originalContent = btn.innerHTML;
+            
+            btn.innerHTML = 'Envoi en cours...';
+            btn.disabled = true;
+            btn.classList.add('opacity-70');
+            
+            setTimeout(() => {
+                btn.innerHTML = '<span class="material-symbols-outlined">check_circle</span> Message envoyé';
+                btn.classList.remove('bg-primary');
+                btn.classList.add('bg-green-600');
+                
+                setTimeout(() => {
+                    e.target.reset();
+                    btn.innerHTML = originalContent;
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-70', 'bg-green-600');
+                    btn.classList.add('bg-primary');
+                }, 3000);
+            }, 1500);
+        });
+
+        // Parallax effect for hero
+        window.addEventListener('scroll', function() {
+            const scrolled = window.pageYOffset;
+            const heroImage = document.querySelector('.absolute.inset-0.z-0 .bg-cover');
+            if(heroImage) {
+                heroImage.style.transform = `translateY(${scrolled * 0.4}px) scale(${1 + scrolled * 0.0005})`;
+            }
+        });
+    </script>
+<script src="/cart.js"></script>
+</body></html>

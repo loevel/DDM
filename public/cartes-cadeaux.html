@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html class="light" lang="fr"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Cartes Cadeaux - DDM Wigs &amp; More</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Manrope:wght@400;600;800&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<style>
+  .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 300, 'GRAD' 0, 'opsz' 24; }
+  .amount-card.selected { border-color: #d4a373; background-color: #fff8f2; }
+</style>
+<script id="tailwind-config">
+tailwind.config = {
+  darkMode: "class",
+  theme: { extend: { colors: {
+    "primary": "#7d562d", "primary-container": "#d4a373", "on-primary": "#ffffff",
+    "surface": "#fcf9f8", "surface-container-low": "#f6f3f2", "surface-container": "#f0eded",
+    "on-surface": "#1b1c1c", "on-surface-variant": "#50453b",
+    "outline": "#82756a", "outline-variant": "#d4c4b7", "background": "#fcf9f8",
+  }, fontFamily: {
+    "headline": ["Libre Caslon Text", "serif"],
+    "body": ["Manrope", "sans-serif"],
+  }, fontSize: {
+    "headline-xl": ["3rem", { lineHeight: "1.2", letterSpacing: "-0.02em" }],
+    "headline-lg": ["2rem", { lineHeight: "1.3" }],
+    "headline-md": ["1.5rem", { lineHeight: "1.4" }],
+    "body-lg": ["1.125rem", { lineHeight: "1.6" }],
+    "body-md": ["1rem", { lineHeight: "1.6" }],
+    "label-md": ["0.875rem", { lineHeight: "1.2", letterSpacing: "0.05em" }],
+  }, spacing: {
+    "grid-margin-desktop": "5rem",
+    "section-gap-desktop": "7.5rem",
+    "section-gap-mobile": "4rem",
+    "container-max-width": "90rem",
+    "grid-gutter": "1.5rem",
+  }}}
+}
+</script>
+</head>
+<body class="bg-background text-on-surface font-body">
+
+<!-- Navigation -->
+<nav class="w-full top-0 sticky bg-surface/95 backdrop-blur-md shadow-sm z-50 transition-all duration-300">
+<div class="flex justify-between items-center px-grid-margin-desktop h-20 max-w-container-max-width mx-auto">
+  <div class="flex items-center gap-4">
+    <span class="font-headline text-headline-md text-on-surface tracking-tight">DDM Wigs &amp; More</span>
+  </div>
+  <div class="hidden md:flex items-center gap-8">
+    <a class="text-on-surface-variant hover:text-primary font-label-md text-label-md transition-colors duration-300" href="/boutique">Boutique</a>
+    <a class="text-on-surface-variant hover:text-primary font-label-md text-label-md transition-colors duration-300" href="/location">Locations</a>
+    <a class="text-on-surface-variant hover:text-primary font-label-md text-label-md transition-colors duration-300" href="/accessoires">Accessoires</a>
+    <a class="text-on-surface-variant hover:text-primary font-label-md text-label-md transition-colors duration-300" href="/notre-histoire">Notre Histoire</a>
+    <a class="text-on-surface-variant hover:text-primary font-label-md text-label-md transition-colors duration-300" href="/guide-entretien">Guide d'Entretien</a>
+  </div>
+  <div class="flex items-center gap-6">
+    <button class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer">person</button>
+    <div class="relative">
+      <button class="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer">shopping_bag</button>
+      <span id="cart-badge" class="absolute -top-1 -right-1 bg-primary text-white text-[10px] rounded-full w-4 h-4 items-center justify-center font-bold" style="display:none">0</span>
+    </div>
+  </div>
+</div>
+</nav>
+
+<!-- Hero -->
+<section class="bg-surface-container-low py-20 border-b border-outline-variant">
+  <div class="max-w-container-max-width mx-auto px-grid-margin-desktop text-center">
+    <p class="font-label-md text-label-md text-primary uppercase tracking-widest mb-4">Offrir le luxe</p>
+    <h1 class="font-headline text-headline-xl text-on-surface mb-6">Cartes Cadeaux</h1>
+    <p class="font-body text-body-lg text-on-surface-variant max-w-2xl mx-auto">
+      Offrez à ceux que vous aimez la liberté de choisir leur perruque idéale. La carte cadeau DDM Wigs &amp; More — un présent d'exception.
+    </p>
+  </div>
+</section>
+
+<!-- Gift Card Selector -->
+<section class="py-section-gap-desktop">
+  <div class="max-w-container-max-width mx-auto px-grid-margin-desktop">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-16 items-start">
+
+      <!-- Visual Card -->
+      <div class="sticky top-28">
+        <div class="aspect-[3/2] rounded bg-gradient-to-br from-[#d4a373] via-[#f0ead6] to-[#e9edc9] flex flex-col justify-between p-10 shadow-xl">
+          <div class="flex justify-between items-start">
+            <span class="font-headline text-2xl text-[#2c1600] tracking-tight">DDM Wigs &amp; More</span>
+            <span class="material-symbols-outlined text-[#7d562d] text-3xl">diamond</span>
+          </div>
+          <div>
+            <p class="font-label-md text-label-md text-[#623f18] uppercase tracking-widest mb-2">Carte Cadeau</p>
+            <p id="card-amount-display" class="font-headline text-5xl text-[#2c1600]">100 $</p>
+            <p class="font-body text-body-md text-[#623f18] mt-1">CAD</p>
+          </div>
+        </div>
+        <p class="text-on-surface-variant text-body-md mt-4 text-center">Valable sur toute la boutique DDM Wigs &amp; More · Sans date d'expiration</p>
+      </div>
+
+      <!-- Form -->
+      <div>
+        <h2 class="font-headline text-headline-lg text-on-surface mb-8">Personnalisez votre cadeau</h2>
+
+        <!-- Amount selection -->
+        <div class="mb-8">
+          <label class="font-label-md text-label-md text-on-surface uppercase tracking-widest block mb-4">Montant</label>
+          <div class="grid grid-cols-4 gap-3 mb-4">
+            <button class="amount-card border border-outline-variant rounded p-4 text-center font-headline text-headline-md text-on-surface hover:border-primary transition-colors" data-amount="50" onclick="selectAmount(50)">50 $</button>
+            <button class="amount-card border border-outline-variant rounded p-4 text-center font-headline text-headline-md text-on-surface hover:border-primary transition-colors selected" data-amount="100" onclick="selectAmount(100)">100 $</button>
+            <button class="amount-card border border-outline-variant rounded p-4 text-center font-headline text-headline-md text-on-surface hover:border-primary transition-colors" data-amount="150" onclick="selectAmount(150)">150 $</button>
+            <button class="amount-card border border-outline-variant rounded p-4 text-center font-headline text-headline-md text-on-surface hover:border-primary transition-colors" data-amount="200" onclick="selectAmount(200)">200 $</button>
+          </div>
+          <div class="flex items-center gap-3">
+            <span class="font-body text-body-md text-on-surface-variant">Montant personnalisé :</span>
+            <div class="flex items-center border border-outline-variant rounded px-4 py-2 flex-1">
+              <span class="text-on-surface-variant mr-2">$</span>
+              <input type="number" id="custom-amount" min="25" max="1000" placeholder="Entrez un montant" class="outline-none bg-transparent font-body text-body-md text-on-surface w-full" oninput="selectCustomAmount(this.value)"/>
+              <span class="text-on-surface-variant ml-1">CAD</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Delivery type -->
+        <div class="mb-8">
+          <label class="font-label-md text-label-md text-on-surface uppercase tracking-widest block mb-4">Livraison</label>
+          <div class="grid grid-cols-2 gap-4">
+            <label class="border border-primary rounded p-4 cursor-pointer bg-[#fff8f2]">
+              <input type="radio" name="delivery" value="email" checked class="sr-only"/>
+              <div class="flex items-center gap-3 mb-2">
+                <span class="material-symbols-outlined text-primary">email</span>
+                <span class="font-label-md text-label-md text-on-surface">Par email</span>
+              </div>
+              <p class="font-body text-body-md text-on-surface-variant text-sm">Livraison immédiate · Gratuit</p>
+            </label>
+            <label class="border border-outline-variant rounded p-4 cursor-pointer hover:border-primary transition-colors">
+              <input type="radio" name="delivery" value="physical" class="sr-only"/>
+              <div class="flex items-center gap-3 mb-2">
+                <span class="material-symbols-outlined text-on-surface-variant">card_giftcard</span>
+                <span class="font-label-md text-label-md text-on-surface">Carte physique</span>
+              </div>
+              <p class="font-body text-body-md text-on-surface-variant text-sm">5-7 jours · 9.99 $ CAD</p>
+            </label>
+          </div>
+        </div>
+
+        <!-- Recipient info -->
+        <div class="space-y-5 mb-8">
+          <div>
+            <label class="font-label-md text-label-md text-on-surface uppercase tracking-widest block mb-2">Nom du destinataire</label>
+            <input type="text" id="recipient-name" placeholder="Prénom Nom" class="w-full border border-outline-variant rounded px-4 py-3 font-body text-body-md text-on-surface bg-surface outline-none focus:border-primary transition-colors"/>
+          </div>
+          <div>
+            <label class="font-label-md text-label-md text-on-surface uppercase tracking-widest block mb-2">Email du destinataire</label>
+            <input type="email" id="recipient-email" placeholder="exemple@email.com" class="w-full border border-outline-variant rounded px-4 py-3 font-body text-body-md text-on-surface bg-surface outline-none focus:border-primary transition-colors"/>
+          </div>
+          <div>
+            <label class="font-label-md text-label-md text-on-surface uppercase tracking-widest block mb-2">Message personnel <span class="text-on-surface-variant normal-case">(optionnel)</span></label>
+            <textarea id="gift-message" rows="3" placeholder="Ajoutez un message chaleureux..." class="w-full border border-outline-variant rounded px-4 py-3 font-body text-body-md text-on-surface bg-surface outline-none focus:border-primary transition-colors resize-none"></textarea>
+          </div>
+          <div>
+            <label class="font-label-md text-label-md text-on-surface uppercase tracking-widest block mb-2">Votre email</label>
+            <input type="email" id="sender-email" placeholder="votre@email.com" class="w-full border border-outline-variant rounded px-4 py-3 font-body text-body-md text-on-surface bg-surface outline-none focus:border-primary transition-colors"/>
+          </div>
+        </div>
+
+        <!-- CTA -->
+        <button onclick="purchaseGiftCard()" class="w-full bg-primary text-white font-label-md text-label-md py-4 rounded hover:bg-on-primary-container hover:text-on-surface transition-colors uppercase tracking-widest">
+          Acheter la carte cadeau — <span id="cta-amount">100 $</span> CAD
+        </button>
+        <p class="text-on-surface-variant text-body-md text-center mt-3">Paiement 100% sécurisé · Aucune date d'expiration</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Why gift card -->
+<section class="py-section-gap-desktop bg-surface-container-low border-t border-outline-variant">
+  <div class="max-w-container-max-width mx-auto px-grid-margin-desktop">
+    <h2 class="font-headline text-headline-lg text-on-surface text-center mb-12">Pourquoi offrir une carte DDM ?</h2>
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-10">
+      <div class="text-center">
+        <span class="material-symbols-outlined text-primary text-4xl mb-4 block">auto_awesome</span>
+        <h3 class="font-headline text-headline-md text-on-surface mb-3">Choix illimité</h3>
+        <p class="font-body text-body-md text-on-surface-variant">La destinataire choisit elle-même parmi toute notre collection perruques, accessoires et soins.</p>
+      </div>
+      <div class="text-center">
+        <span class="material-symbols-outlined text-primary text-4xl mb-4 block">schedule</span>
+        <h3 class="font-headline text-headline-md text-on-surface mb-3">Sans expiration</h3>
+        <p class="font-body text-body-md text-on-surface-variant">Les cartes cadeaux DDM n'expirent jamais. Utilisable à tout moment, sans pression.</p>
+      </div>
+      <div class="text-center">
+        <span class="material-symbols-outlined text-primary text-4xl mb-4 block">verified</span>
+        <h3 class="font-headline text-headline-md text-on-surface mb-3">Livraison rapide</h3>
+        <p class="font-body text-body-md text-on-surface-variant">Envoi par email immédiat ou carte physique livrée sous 5-7 jours dans un écrin luxueux.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="w-full mt-section-gap-desktop bg-surface-container-low border-t border-outline-variant">
+<div class="grid grid-cols-1 md:grid-cols-4 gap-grid-gutter px-grid-margin-desktop py-section-gap-mobile max-w-container-max-width mx-auto">
+  <div class="space-y-6">
+    <span class="font-headline text-headline-md text-on-surface tracking-tight block">DDM Wigs &amp; More</span>
+    <p class="font-body text-body-md text-on-surface-variant">Offrir la confiance grâce à des solutions capillaires premium depuis 2024.</p>
+  </div>
+  <div class="flex flex-col space-y-4">
+    <h4 class="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-2">Explorer</h4>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/boutique">Boutique Perruques</a>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/location">Locations</a>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/accessoires">Accessoires</a>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/cartes-cadeaux">Cartes Cadeaux</a>
+  </div>
+  <div class="flex flex-col space-y-4">
+    <h4 class="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-2">Support</h4>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/livraison">Livraison &amp; Retours</a>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/confidentialite">Politique de Confidentialité</a>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/conditions">Conditions de Location</a>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/contact">Nous Contacter</a>
+    <a class="text-on-surface-variant hover:text-on-surface transition-colors font-body text-body-md" href="/faq">FAQ</a>
+  </div>
+  <div class="flex flex-col space-y-4">
+    <h4 class="font-label-md text-label-md text-on-surface uppercase tracking-widest mb-2">Contact</h4>
+    <p class="text-on-surface-variant font-body text-body-md">contact@ddmwigs.ca</p>
+    <p class="text-on-surface-variant font-body text-body-md">Montréal, Québec, Canada</p>
+    <p class="text-primary font-body text-body-md italic">Sur rendez-vous uniquement.</p>
+  </div>
+</div>
+<div class="max-w-container-max-width mx-auto px-grid-margin-desktop py-6 border-t border-outline-variant/30 text-center">
+  <p class="text-on-surface-variant font-label-md text-label-md">© 2024 DDM Wigs &amp; More. Tous les prix sont en CAD.</p>
+</div>
+</footer>
+
+<script>
+let selectedAmount = 100;
+
+function selectAmount(amount) {
+  selectedAmount = amount;
+  document.querySelectorAll('.amount-card').forEach(c => c.classList.remove('selected'));
+  document.querySelector('[data-amount="' + amount + '"]').classList.add('selected');
+  document.getElementById('card-amount-display').textContent = amount + ' $';
+  document.getElementById('cta-amount').textContent = amount + ' $';
+  document.getElementById('custom-amount').value = '';
+}
+
+function selectCustomAmount(val) {
+  const amount = parseInt(val);
+  if (amount >= 25 && amount <= 1000) {
+    selectedAmount = amount;
+    document.querySelectorAll('.amount-card').forEach(c => c.classList.remove('selected'));
+    document.getElementById('card-amount-display').textContent = amount + ' $';
+    document.getElementById('cta-amount').textContent = amount + ' $';
+  }
+}
+
+function purchaseGiftCard() {
+  const name = document.getElementById('recipient-name').value;
+  const email = document.getElementById('recipient-email').value;
+  const senderEmail = document.getElementById('sender-email').value;
+  if (!name || !email || !senderEmail) {
+    alert('Veuillez remplir tous les champs obligatoires.');
+    return;
+  }
+  // TODO: connect to Stripe or payment API
+  alert('Merci ! Votre carte cadeau de ' + selectedAmount + ' $ CAD sera envoyée à ' + email + '.\n\nPaiement à configurer.');
+}
+
+// Delivery radio styling
+document.querySelectorAll('input[name="delivery"]').forEach(radio => {
+  radio.addEventListener('change', function() {
+    document.querySelectorAll('label:has(input[name="delivery"])').forEach(l => {
+      l.classList.remove('border-primary', 'bg-[#fff8f2]');
+      l.classList.add('border-outline-variant');
+    });
+    this.closest('label').classList.add('border-primary', 'bg-[#fff8f2]');
+    this.closest('label').classList.remove('border-outline-variant');
+  });
+});
+</script>
+<script src="/cart.js"></script>
+</body></html>
