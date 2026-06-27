@@ -11,5 +11,9 @@ database_id = "0047be0b-294e-471a-b4dd-f94204bb9081"
 binding = "MEDIA"
 bucket_name = "ddm-wigs-assets"
 
+[[kv_namespaces]]
+binding = "CACHE"
+id = "5927b4f2125d40af8892a7edf81f4802"
+
 [vars]
 ENVIRONMENT = "production"
