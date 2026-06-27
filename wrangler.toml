@@ -1,0 +1,15 @@
+name = "ddm-wigs"
+compatibility_date = "2024-11-01"
+pages_build_output_dir = "public"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ddm-wigs-db"
+database_id = "0047be0b-294e-471a-b4dd-f94204bb9081"
+
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "ddm-wigs-assets"
+
+[vars]
+ENVIRONMENT = "production"
