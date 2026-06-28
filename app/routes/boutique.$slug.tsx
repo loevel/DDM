@@ -1,0 +1,920 @@
+import { json } from "@remix-run/cloudflare";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import { Link, useLoaderData } from "@remix-run/react";
+import { useEffect, useState } from "react";
+import { getDB, getProducts } from "~/lib/db.server";
+import type { Product } from "~/lib/db.server";
+
+// ─── Types ─────────────────────────────────────────────────────────────────
+
+interface Review {
+  id: number;
+  customer_name: string;
+  rating: number;
+  body: string | null;
+  created_at: string;
+}
+
+interface ReviewStats {
+  count: number;
+  avg: number;
+  dist: number[]; // index 0 = 1★ … index 4 = 5★
+}
+
+interface LongueurVariant { slug: string; longueur_po: number; }
+interface CouleurVariant { slug: string; couleur: string; }
+
+// ─── Loader ────────────────────────────────────────────────────────────────
+
+export async function loader({ params, context }: LoaderFunctionArgs) {
+  const db = getDB(context as any);
+  const product = await db
+    .prepare("SELECT * FROM products WHERE slug = ?")
+    .bind(params.slug)
+    .first<Product>();
+
+  if (!product) throw new Response("Produit introuvable", { status: 404 });
+
+  // Variantes de longueur : même famille + texture, tous stocks
+  const longueurVars = product.famille && product.texture
+    ? (await db.prepare(
+        "SELECT slug, longueur_po FROM products WHERE famille = ? AND texture = ? AND longueur_po IS NOT NULL ORDER BY longueur_po ASC"
+      ).bind(product.famille, product.texture).all<LongueurVariant>()).results ?? []
+    : [];
+
+  // Variantes de couleur : même famille + longueur
+  const couleurVars = product.famille && product.longueur_po
+    ? (await db.prepare(
+        "SELECT slug, couleur FROM products WHERE famille = ? AND longueur_po = ? AND couleur IS NOT NULL ORDER BY couleur ASC"
+      ).bind(product.famille, product.longueur_po).all<CouleurVariant>()).results ?? []
+    : [];
+
+  // Avis approuvés (table may not exist yet → graceful fallback)
+  let reviews: Review[] = [];
+  let reviewStats: ReviewStats = { count: 0, avg: 0, dist: [0, 0, 0, 0, 0] };
+  try {
+    const rows = (await db.prepare(
+      "SELECT id, customer_name, rating, body, created_at FROM reviews WHERE product_id = ? AND approved = 1 ORDER BY created_at DESC LIMIT 20"
+    ).bind(product.id).all<Review>()).results ?? [];
+    reviews = rows;
+    if (rows.length > 0) {
+      const dist: number[] = [0, 0, 0, 0, 0];
+      let sum = 0;
+      rows.forEach(r => { sum += r.rating; dist[r.rating - 1]++; });
+      reviewStats = { count: rows.length, avg: sum / rows.length, dist };
+    }
+  } catch {
+    // table reviews pas encore créée
+  }
+
+  // Produits similaires (même famille, exclu l'actuel, max 4)
+  const similaires = await getProducts(db, { famille: product.famille ?? undefined });
+  const related = similaires.filter(p => p.id !== product.id).slice(0, 4);
+
+  // Vente flash active sur ce produit
+  let flash: { price: number; ends_at: string } | null = null;
+  try {
+    const now = new Date().toISOString();
+    const row = await db.prepare(
+      "SELECT flash_price_cad, ends_at FROM flash_sales WHERE product_id = ? AND active = 1 AND starts_at <= ? AND ends_at > ? ORDER BY flash_price_cad ASC LIMIT 1"
+    ).bind(product.id, now, now).first<{ flash_price_cad: number; ends_at: string }>();
+    if (row) flash = { price: row.flash_price_cad, ends_at: row.ends_at };
+  } catch { /* table pas encore créée */ }
+
+  return json({ product, related, longueurVars, couleurVars, reviews, reviewStats, flash });
+}
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  if (!data) return [{ title: "Produit — DDM Wigs" }];
+  const p = data.product;
+  return [
+    { title: `${p.name} — DDM Wigs & More` },
+    { name: "description", content: p.description ?? `${p.name} — Perruque cheveux humains premium. ${p.texture ?? ""} ${p.longueur_po ? p.longueur_po + " po" : ""}. Prix: ${p.price_cad.toFixed(2)} $ CAD.` },
+  ];
+};
+
+// ─── Labels ────────────────────────────────────────────────────────────────
+
+const TEXTURE_LABELS: Record<string, string> = {
+  "lisse": "Lisse (Straight)", "body-wave": "Body Wave", "water-wave": "Water Wave",
+  "deep-wave": "Deep Wave", "loose-wave": "Loose Wave", "boucle": "Bouclé (Curly)",
+  "kinky-curly": "Kinky Curly", "kinky-straight": "Kinky Straight",
+  "bob": "Bob", "avec-frange": "Avec frange",
+};
+
+const LACE_LABELS: Record<string, string> = {
+  "13x4": "13×4 Lace Front", "13x6": "13×6 Lace Front",
+  "5x5": "5×5 Lace Closure", "4x4": "4×4 Lace Closure",
+  "360": "360 Lace", "full": "Full Lace",
+  "glueless": "Sans colle (Glueless)", "pre-everything": "Prêt à porter",
+  "v-part": "V-Part", "u-part": "U-Part",
+};
+
+const FAMILLE_LABELS: Record<string, string> = {
+  perruque: "Perruques", meche: "Mèches", closure: "Closures",
+  frontal: "Frontals", accessoire: "Accessoires", soin: "Soins",
+};
+
+// ─── Page ──────────────────────────────────────────────────────────────────
+
+function FlashCountdown({ endsAt }: { endsAt: string }) {
+  const [left, setLeft] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()));
+  useEffect(() => {
+    const id = setInterval(() => {
+      const ms = Math.max(0, new Date(endsAt).getTime() - Date.now());
+      setLeft(ms);
+      if (ms === 0) clearInterval(id);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [endsAt]);
+  const s = Math.floor(left / 1000);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const d = Math.floor(s / 86400);
+  const h = Math.floor((s % 86400) / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  return <span className="font-mono tabular-nums">{d > 0 ? `${d}j ` : ""}{pad(h)}:{pad(m)}:{pad(sec)}</span>;
+}
+
+export default function FicheProduit() {
+  const { product: p, related, longueurVars, couleurVars, reviews, reviewStats, flash } = useLoaderData<typeof loader>();
+
+  const [qty, setQty] = useState(1);
+  const [cartState, setCartState] = useState<"idle" | "loading" | "added" | "error">("idle");
+  const [openSection, setOpenSection] = useState<string | null>("description");
+  const [selectedDensity, setSelectedDensity] = useState<number>(p.densite ?? 150);
+  const [wishlist, setWishlist] = useState(false);
+  const [activeImg, setActiveImg] = useState(0);
+
+  const displayPrice = flash ? flash.price : p.price_cad;
+  const originalPrice = flash ? p.price_cad : (p.compare_at_price_cad ?? null);
+  const discount = originalPrice && originalPrice > displayPrice
+    ? Math.round((1 - displayPrice / originalPrice) * 100)
+    : null;
+
+  const showLongueurVariants = longueurVars.length > 1;
+  const showCouleurVariants = couleurVars.length > 1;
+  const showDensityPicker = p.famille === "perruque" || p.famille === "closure" || p.famille === "frontal";
+
+  async function addToCart() {
+    if (cartState === "loading") return;
+    setCartState("loading");
+    try {
+      let cartId = localStorage.getItem("ddm_cart_id");
+      if (!cartId) { cartId = crypto.randomUUID(); localStorage.setItem("ddm_cart_id", cartId); }
+      const res = await fetch(`/api/cart?cartId=${cartId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId: p.id, quantity: qty }),
+      });
+      if (!res.ok) throw new Error(`Erreur ${res.status}`);
+      const cart = await res.json() as { items: { quantity: number }[] };
+      const total = cart.items.reduce((s: number, i: { quantity: number }) => s + i.quantity, 0);
+      const badge = document.getElementById("cart-badge");
+      if (badge) { badge.textContent = String(total); badge.classList.remove("hidden"); badge.classList.add("flex"); }
+      setCartState("added");
+      setTimeout(() => setCartState("idle"), 2500);
+    } catch (err) {
+      console.error("Erreur panier:", err);
+      setCartState("error");
+      setTimeout(() => setCartState("idle"), 3000);
+    }
+  }
+
+  const densiteLabel = selectedDensity !== p.densite ? ` · Densité ${selectedDensity}%` : "";
+  const whatsappMsg = encodeURIComponent(
+    `Bonjour, je suis intéressée par : ${p.name}${p.longueur_po ? ` — ${p.longueur_po} po` : ""}${densiteLabel}. Prix: ${p.price_cad.toFixed(2)} $ CAD.`
+  );
+
+  // Galerie : image principale + up to 4 miniatures
+  const galleryImages = p.image_key ? [p.image_key] : [];
+
+  return (
+    <main className="max-w-[90rem] mx-auto px-6 md:px-10 lg:px-20 py-10">
+
+      {/* Breadcrumb */}
+      <nav className="flex items-center gap-2 font-sans text-xs text-on-surface-variant mb-8 flex-wrap">
+        <Link to="/" className="hover:text-primary transition-colors">Accueil</Link>
+        <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+        <Link to="/boutique" className="hover:text-primary transition-colors">Boutique</Link>
+        {p.famille && (
+          <>
+            <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+            <Link to={`/boutique?famille=${p.famille}`} className="hover:text-primary transition-colors">
+              {FAMILLE_LABELS[p.famille] ?? p.famille}
+            </Link>
+          </>
+        )}
+        <span className="material-symbols-outlined text-[14px]">chevron_right</span>
+        <span className="text-on-surface font-medium truncate max-w-[200px]">{p.name}</span>
+      </nav>
+
+      {/* Layout principal */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 xl:gap-20 mb-20">
+
+        {/* ── Galerie ── */}
+        <div className="space-y-4">
+          {/* Image principale */}
+          <div className="aspect-[3/4] bg-surface-container overflow-hidden relative group">
+            {galleryImages[activeImg] ? (
+              <img src={galleryImages[activeImg]} alt={p.name}
+                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-outline-variant">
+                <span className="material-symbols-outlined text-6xl">styler</span>
+                <p className="font-sans text-sm">Photo à venir</p>
+              </div>
+            )}
+
+            {/* Badges */}
+            <div className="absolute top-4 left-4 flex flex-col gap-2">
+              {discount && (
+                <span className="bg-error text-on-error px-3 py-1 text-xs font-bold uppercase tracking-widest">
+                  -{discount}%
+                </span>
+              )}
+              {p.hd_lace === 1 && (
+                <span className="bg-surface/90 backdrop-blur text-on-surface border border-outline-variant/40 px-3 py-1 text-xs font-bold uppercase tracking-widest">
+                  HD Lace
+                </span>
+              )}
+              {p.pret_a_porter === 1 && (
+                <span className="bg-surface/90 backdrop-blur text-on-surface border border-outline-variant/40 px-3 py-1 text-xs font-bold uppercase tracking-widest">
+                  Prêt à porter
+                </span>
+              )}
+            </div>
+
+            {/* Wishlist */}
+            <button
+              onClick={() => setWishlist(w => !w)}
+              aria-label={wishlist ? "Retirer des favoris" : "Ajouter aux favoris"}
+              className="absolute top-4 right-4 w-9 h-9 bg-surface/90 backdrop-blur flex items-center justify-center hover:bg-surface transition-colors">
+              <span className={`material-symbols-outlined text-xl ${wishlist ? "text-error" : "text-on-surface-variant"}`}
+                style={{ fontVariationSettings: wishlist ? "'FILL' 1" : "'FILL' 0" }}>
+                favorite
+              </span>
+            </button>
+          </div>
+
+          {/* Miniatures */}
+          <div className="flex gap-2">
+            {galleryImages.map((src, i) => (
+              <button key={i} onClick={() => setActiveImg(i)}
+                className={`w-20 h-20 overflow-hidden shrink-0 border-2 transition-colors ${activeImg === i ? "border-primary" : "border-transparent hover:border-outline-variant"}`}>
+                <img src={src} alt="" className="w-full h-full object-cover" />
+              </button>
+            ))}
+            {/* Placeholders pour photos futures */}
+            {galleryImages.length > 0 && [1, 2, 3].map(i => (
+              <div key={i} className="w-20 h-20 border border-outline-variant/50 border-dashed bg-surface-container flex items-center justify-center shrink-0">
+                <span className="material-symbols-outlined text-outline-variant/60 text-lg">add_photo_alternate</span>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ── Infos produit ── */}
+        <div className="flex flex-col">
+
+          {/* Famille + Nom */}
+          <div className="mb-4">
+            <p className="font-sans text-xs font-bold uppercase tracking-[0.2em] text-primary mb-2">
+              {FAMILLE_LABELS[p.famille ?? ""] ?? "DDM Wigs"}
+            </p>
+            <h1 className="font-serif text-3xl md:text-4xl text-on-surface leading-tight mb-3">{p.name}</h1>
+
+            {/* Rating */}
+            <div className="flex items-center gap-3">
+              {reviewStats.count > 0 ? (
+                <>
+                  <div className="flex text-primary">
+                    {[1,2,3,4,5].map(s => (
+                      <span key={s} className="material-symbols-outlined text-lg"
+                        style={{ fontVariationSettings: s <= Math.round(reviewStats.avg) ? "'FILL' 1" : "'FILL' 0" }}>
+                        star
+                      </span>
+                    ))}
+                  </div>
+                  <a href="#avis" className="font-sans text-sm text-on-surface-variant hover:text-primary transition-colors">
+                    {reviewStats.avg.toFixed(1)} · {reviewStats.count} avis
+                  </a>
+                </>
+              ) : (
+                <>
+                  <div className="flex text-outline-variant/60">
+                    {[1,2,3,4,5].map(s => (
+                      <span key={s} className="material-symbols-outlined text-lg" style={{ fontVariationSettings: "'FILL' 0" }}>star</span>
+                    ))}
+                  </div>
+                  <a href="#avis" className="font-sans text-sm text-on-surface-variant hover:text-primary transition-colors">
+                    Soyez la première à laisser un avis
+                  </a>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* Bannière vente flash */}
+          {flash && (
+            <div className="flex items-center gap-2 bg-error/10 border border-error/20 rounded px-3 py-2 mb-4">
+              <span className="material-symbols-outlined text-error text-lg" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+              <span className="font-sans text-sm font-bold text-error uppercase tracking-wider">Vente Flash</span>
+              <span className="font-sans text-xs text-error/80 ml-1">— Se termine dans</span>
+              <span className="font-sans text-sm font-bold text-error">
+                <FlashCountdown endsAt={flash.ends_at} />
+              </span>
+            </div>
+          )}
+
+          {/* Prix */}
+          <div className="flex items-end gap-4 mb-6 pb-6 border-b border-outline-variant">
+            <p className={`font-serif text-4xl font-bold ${flash ? "text-error" : "text-primary"}`}>
+              {displayPrice.toFixed(2)} $
+            </p>
+            {originalPrice && originalPrice > displayPrice && (
+              <p className="font-sans text-xl text-on-surface-variant line-through mb-1">
+                {originalPrice.toFixed(2)} $
+              </p>
+            )}
+            {discount && (
+              <span className="mb-1 px-2 py-0.5 bg-error/10 text-error font-sans text-sm font-bold">
+                -{discount}%
+              </span>
+            )}
+            <span className="font-sans text-xs text-on-surface-variant mb-1">CAD · taxes incluses</span>
+          </div>
+
+          {/* ── Sélecteur de couleur ── */}
+          {showCouleurVariants && (
+            <div className="mb-5">
+              <p className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2.5">
+                Couleur —{" "}
+                <span className="text-on-surface normal-case font-semibold tracking-normal">{p.couleur}</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {couleurVars.map(v => (
+                  <Link key={v.slug} to={`/boutique/${v.slug}`}
+                    className={`px-3 py-1.5 font-sans text-xs font-semibold border transition-all ${
+                      v.slug === p.slug
+                        ? "border-primary bg-primary text-on-primary"
+                        : "border-outline-variant text-on-surface hover:border-primary hover:text-primary"
+                    }`}>
+                    {v.couleur}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Sélecteur de longueur ── */}
+          {showLongueurVariants && (
+            <div className="mb-5">
+              <p className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2.5">
+                Longueur —{" "}
+                <span className="text-on-surface normal-case font-semibold tracking-normal">{p.longueur_po} pouces</span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {longueurVars.map(v => (
+                  <Link key={v.slug} to={`/boutique/${v.slug}`}
+                    className={`w-14 h-10 flex items-center justify-center font-sans text-xs font-bold border transition-all ${
+                      v.slug === p.slug
+                        ? "border-primary bg-primary text-on-primary"
+                        : "border-outline-variant text-on-surface hover:border-primary hover:text-primary"
+                    }`}>
+                    {v.longueur_po}"
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Sélecteur de densité ── */}
+          {showDensityPicker && (
+            <div className="mb-5">
+              <p className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2.5">
+                Densité —{" "}
+                <span className="text-on-surface normal-case font-semibold tracking-normal">{selectedDensity}%</span>
+              </p>
+              <div className="flex gap-2">
+                {[130, 150, 180].map(d => (
+                  <button key={d} onClick={() => setSelectedDensity(d)}
+                    className={`w-16 h-10 font-sans text-xs font-bold border transition-all ${
+                      selectedDensity === d
+                        ? "border-primary bg-primary text-on-primary"
+                        : "border-outline-variant text-on-surface hover:border-primary hover:text-primary"
+                    }`}>
+                    {d}%
+                  </button>
+                ))}
+              </div>
+              <p className="font-sans text-[11px] text-on-surface-variant mt-1.5">
+                {selectedDensity === 130 && "Naturelle et légère — idéale pour l'usage quotidien"}
+                {selectedDensity === 150 && "Volumineuse — notre densité la plus populaire"}
+                {selectedDensity === 180 && "Extra volumineuse — rendu très plein et glamour"}
+              </p>
+            </div>
+          )}
+
+          {/* Caractéristiques résumées */}
+          <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-5 text-sm font-sans pb-5 border-b border-outline-variant/50">
+            {p.texture && <SpecRow icon="waves" label="Texture" value={TEXTURE_LABELS[p.texture] ?? p.texture} />}
+            {p.type_lace && <SpecRow icon="crop_free" label="Construction" value={LACE_LABELS[p.type_lace] ?? p.type_lace} />}
+            {!showLongueurVariants && p.longueur_po && <SpecRow icon="straighten" label="Longueur" value={`${p.longueur_po} pouces`} />}
+            {!showDensityPicker && p.densite && <SpecRow icon="density_medium" label="Densité" value={`${p.densite}%`} />}
+            {!showCouleurVariants && p.couleur && <SpecRow icon="palette" label="Couleur" value={p.couleur} />}
+            {p.quantite_meches && <SpecRow icon="layers" label="Mèches" value={`${p.quantite_meches} bundle${p.quantite_meches > 1 ? "s" : ""}`} />}
+          </div>
+
+          {/* Options booléennes */}
+          {(p.hd_lace || p.glueless || p.pret_a_porter) && (
+            <div className="flex flex-wrap gap-2 mb-5">
+              {p.hd_lace === 1 && <OptionTag icon="visibility_off" label="HD Lace — dentelle invisible" />}
+              {p.glueless === 1 && <OptionTag icon="block" label="Sans colle" />}
+              {p.pret_a_porter === 1 && <OptionTag icon="timer" label="Prêt à porter en 5 min" />}
+            </div>
+          )}
+
+          {/* Stock */}
+          {p.stock > 0 && p.stock <= 5 && (
+            <div className="flex items-center gap-2 mb-4 font-sans text-sm text-error font-semibold">
+              <span className="material-symbols-outlined text-sm">warning</span>
+              Plus que {p.stock} en stock — commandez vite !
+            </div>
+          )}
+
+          {/* Quantité + panier */}
+          <div className="flex items-center gap-3 mb-4">
+            <div className="flex items-center border border-outline-variant">
+              <button onClick={() => setQty(q => Math.max(1, q - 1))}
+                className="w-10 h-12 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+                <span className="material-symbols-outlined text-lg">remove</span>
+              </button>
+              <span className="w-10 text-center font-sans text-sm font-semibold text-on-surface">{qty}</span>
+              <button onClick={() => setQty(q => Math.min(p.stock || 10, q + 1))}
+                className="w-10 h-12 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
+                <span className="material-symbols-outlined text-lg">add</span>
+              </button>
+            </div>
+
+            <button onClick={addToCart}
+              disabled={p.stock === 0 || cartState === "loading"}
+              className={`flex-1 h-12 flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-widest transition-all duration-300 ${
+                cartState === "added" ? "bg-secondary text-on-secondary"
+                  : cartState === "error" ? "bg-error text-on-error"
+                  : cartState === "loading" ? "bg-primary/70 text-on-primary cursor-wait"
+                  : p.stock === 0 ? "bg-surface-container text-on-surface-variant cursor-not-allowed"
+                  : "bg-primary text-on-primary hover:opacity-90 active:scale-[0.98]"
+              }`}>
+              <span className="material-symbols-outlined text-lg">
+                {cartState === "added" ? "check_circle" : cartState === "error" ? "error" : cartState === "loading" ? "hourglass_empty" : "shopping_bag"}
+              </span>
+              {cartState === "added" ? "Ajouté au panier !"
+                : cartState === "error" ? "Erreur — réessayez"
+                : cartState === "loading" ? "Ajout en cours…"
+                : p.stock === 0 ? "Rupture de stock"
+                : "Ajouter au panier"}
+            </button>
+          </div>
+
+          {/* WhatsApp */}
+          <a href={`https://wa.me/23797193723?text=${whatsappMsg}`} target="_blank" rel="noopener noreferrer"
+            className="w-full h-12 flex items-center justify-center gap-2 border border-on-surface text-on-surface font-sans text-sm font-bold uppercase tracking-widest hover:bg-on-surface hover:text-surface transition-all duration-300 mb-6">
+            <svg viewBox="0 0 24 24" className="w-4 h-4 fill-current shrink-0">
+              <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+              <path d="M12 0C5.374 0 0 5.373 0 12c0 2.114.55 4.097 1.508 5.819L.057 23.172a.75.75 0 0 0 .92.92l5.353-1.451A11.944 11.944 0 0 0 12 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 22c-1.885 0-3.655-.502-5.184-1.381l-.372-.218-3.856 1.046 1.046-3.856-.218-.372A9.96 9.96 0 0 1 2 12C2 6.477 6.477 2 12 2s10 4.477 10 10-4.477 10-10 10z"/>
+            </svg>
+            Commander via WhatsApp
+          </a>
+
+          {/* Trust badges */}
+          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-outline-variant">
+            <TrustBadge icon="local_shipping" label="Livraison rapide" sub="Montréal & environs" />
+            <TrustBadge icon="verified" label="100% Cheveux humains" sub="Qualité premium" />
+            <TrustBadge icon="support_agent" label="Support 7j/7" sub="Par WhatsApp" />
+          </div>
+        </div>
+      </div>
+
+      {/* ── Accordéons ── */}
+      <div className="border-t border-outline-variant mb-20 max-w-4xl">
+
+        <Accordion id="description" label="Description" open={openSection} onToggle={setOpenSection}>
+          <div className="font-sans text-base text-on-surface-variant leading-relaxed space-y-3">
+            {p.description
+              ? p.description.split("\n").map((line, i) => <p key={i}>{line}</p>)
+              : (
+                <>
+                  <p>La {p.name} est une perruque en cheveux humains 100% d&apos;une qualité exceptionnelle.
+                    Chaque mèche est soigneusement sélectionnée pour garantir un rendu naturel et une longévité maximale.</p>
+                  {p.hd_lace === 1 && <p>La technologie <strong>HD Lace</strong> (dentelle ultra-fine) se fond parfaitement avec toutes les carnations pour un rendu totalement invisible à la racine.</p>}
+                  {p.glueless === 1 && <p>Conçue pour être portée <strong>sans colle ni adhésif</strong>, elle est idéale pour un usage quotidien confortable et sans contrainte.</p>}
+                  {p.pret_a_porter === 1 && <p>Cette perruque est <strong>pré-coiffée et prête à porter</strong> : noeuds éclaircis, naissance des cheveux naturelle, mise en place en moins de 5 minutes.</p>}
+                </>
+              )}
+          </div>
+        </Accordion>
+
+        <Accordion id="specs" label="Caractéristiques techniques" open={openSection} onToggle={setOpenSection}>
+          <table className="w-full font-sans text-sm">
+            <tbody className="divide-y divide-outline-variant/30">
+              {([
+                ["Famille", FAMILLE_LABELS[p.famille ?? ""] ?? p.famille],
+                ["Type de cheveux", "100% Cheveux humains"],
+                ["Origine", "Vierge, non traité"],
+                p.texture ? ["Texture", TEXTURE_LABELS[p.texture] ?? p.texture] : null,
+                p.type_lace ? ["Type de construction", LACE_LABELS[p.type_lace] ?? p.type_lace] : null,
+                p.longueur_po ? ["Longueur", `${p.longueur_po} pouces`] : null,
+                p.densite ? ["Densité disponible", `${p.densite}%`] : null,
+                p.couleur ? ["Couleur", p.couleur] : null,
+                p.quantite_meches ? ["Quantité de mèches", `${p.quantite_meches} bundle(s)`] : null,
+                ["HD Lace", p.hd_lace === 1 ? "Oui — dentelle ultra-fine" : "Non"],
+                ["Sans colle", p.glueless === 1 ? "Oui" : "Non"],
+                ["Prêt à porter", p.pret_a_porter === 1 ? "Oui — 5 minutes" : "Non"],
+                ["Peut être teint", "Oui (conseillé professionnel)"],
+                ["Résistance chaleur", "Oui — max 180°C avec protecteur"],
+              ] as ([string, string] | null)[]).filter(Boolean).map(([label, value]) => (
+                <tr key={label as string}>
+                  <td className="py-2.5 pr-6 font-semibold text-on-surface w-52">{label as string}</td>
+                  <td className="py-2.5 text-on-surface-variant">{value as string}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Accordion>
+
+        <Accordion id="entretien" label="Guide d'entretien" open={openSection} onToggle={setOpenSection}>
+          <div className="font-sans text-sm text-on-surface-variant space-y-3">
+            {([
+              ["wash", "Lavage", "Lavez avec un shampoing doux pour cheveux colorés ou naturels. Évitez les produits contenant du sulfate."],
+              ["hot_tub", "Séchage", "Séchez à l'air libre autant que possible. Si vous utilisez un sèche-cheveux, maintenez-le à basse température."],
+              ["thermostat", "Chaleur", "Vous pouvez utiliser fer plat et boucleur à basse température (max 180°C). Appliquez toujours un spray protecteur thermique."],
+              ["style", "Stockage", "Rangez sur un support à perruque ou dans sa boîte d'origine pour préserver la forme et la coupe."],
+              ["event_available", "Durée de vie", "Avec un entretien régulier, votre perruque peut durer 1 à 2 ans ou plus."],
+            ] as [string, string, string][]).map(([icon, title, text]) => (
+              <div key={icon} className="flex gap-3">
+                <span className="material-symbols-outlined text-primary text-lg shrink-0 mt-0.5">{icon}</span>
+                <div>
+                  <p className="font-semibold text-on-surface">{title}</p>
+                  <p>{text}</p>
+                </div>
+              </div>
+            ))}
+            <Link to="/guide-entretien" className="inline-flex items-center gap-1 text-primary font-semibold hover:underline mt-2">
+              Guide complet d&apos;entretien
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </Link>
+          </div>
+        </Accordion>
+
+        <Accordion id="livraison" label="Livraison & retours" open={openSection} onToggle={setOpenSection}>
+          <div className="font-sans text-sm text-on-surface-variant space-y-4">
+            <div className="flex gap-3">
+              <span className="material-symbols-outlined text-primary text-lg shrink-0 mt-0.5">local_shipping</span>
+              <div>
+                <p className="font-semibold text-on-surface">Livraison à domicile</p>
+                <p>Livraison disponible dans la région de Montréal. Contactez-nous via WhatsApp pour les détails et délais.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <span className="material-symbols-outlined text-primary text-lg shrink-0 mt-0.5">storefront</span>
+              <div>
+                <p className="font-semibold text-on-surface">Retrait en boutique</p>
+                <p>Retrait disponible sur rendez-vous. Contactez-nous pour fixer un horaire.</p>
+              </div>
+            </div>
+            <div className="flex gap-3">
+              <span className="material-symbols-outlined text-primary text-lg shrink-0 mt-0.5">assignment_return</span>
+              <div>
+                <p className="font-semibold text-on-surface">Politique de retour</p>
+                <p>Pour des raisons d&apos;hygiène, les perruques ne peuvent pas être retournées une fois essayées. Contactez-nous avant tout achat si vous avez des questions.</p>
+              </div>
+            </div>
+          </div>
+        </Accordion>
+      </div>
+
+      {/* ── Avis clients ── */}
+      <section id="avis" className="mb-20 max-w-4xl scroll-mt-24">
+        <ReviewsSection productId={p.id} reviews={reviews as Review[]} stats={reviewStats as ReviewStats} />
+      </section>
+
+      {/* ── Produits similaires ── */}
+      {related.length > 0 && (
+        <section>
+          <div className="flex items-end justify-between mb-8">
+            <h2 className="font-serif text-2xl md:text-3xl text-on-surface">Vous aimerez aussi</h2>
+            <Link to={`/boutique${p.famille ? `?famille=${p.famille}` : ""}`}
+              className="font-sans text-sm text-primary font-semibold hover:underline hidden md:flex items-center gap-1">
+              Voir tout
+              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+            </Link>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-8">
+            {related.map(r => <RelatedCard key={r.id} product={r} />)}
+          </div>
+        </section>
+      )}
+    </main>
+  );
+}
+
+// ─── ReviewsSection ─────────────────────────────────────────────────────────
+
+function StarPicker({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  const [hover, setHover] = useState(0);
+  return (
+    <div className="flex gap-1">
+      {[1,2,3,4,5].map(s => (
+        <button key={s} type="button"
+          onMouseEnter={() => setHover(s)} onMouseLeave={() => setHover(0)}
+          onClick={() => onChange(s)}
+          className="text-2xl transition-colors">
+          <span className="material-symbols-outlined text-2xl"
+            style={{
+              color: s <= (hover || value) ? "var(--color-primary)" : "var(--color-outline-variant)",
+              fontVariationSettings: s <= (hover || value) ? "'FILL' 1" : "'FILL' 0",
+            }}>
+            star
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ReviewsSection({ productId, reviews, stats }: {
+  productId: number;
+  reviews: Review[];
+  stats: ReviewStats;
+}) {
+  const [name, setName] = useState("");
+  const [rating, setRating] = useState(0);
+  const [body, setBody] = useState("");
+  const [submitState, setSubmitState] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || rating === 0) return;
+    setSubmitState("loading");
+    try {
+      const res = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, customerName: name, rating, reviewBody: body }),
+      });
+      if (!res.ok) throw new Error();
+      setSubmitState("success");
+    } catch {
+      setSubmitState("error");
+    }
+  }
+
+  const STAR_LABELS = ["", "Très mauvais", "Mauvais", "Correct", "Bien", "Excellent"];
+
+  return (
+    <div>
+      <h2 className="font-serif text-2xl md:text-3xl text-on-surface mb-8">Avis clients</h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
+
+        {/* Résumé global */}
+        <div>
+          {stats.count > 0 ? (
+            <div className="flex items-start gap-6">
+              {/* Score */}
+              <div className="text-center shrink-0">
+                <p className="font-serif text-6xl text-primary font-bold leading-none">{stats.avg.toFixed(1)}</p>
+                <div className="flex justify-center mt-1 mb-1">
+                  {[1,2,3,4,5].map(s => (
+                    <span key={s} className="material-symbols-outlined text-base"
+                      style={{ color: s <= Math.round(stats.avg) ? "var(--color-primary)" : "var(--color-outline-variant)", fontVariationSettings: "'FILL' 1" }}>
+                      star
+                    </span>
+                  ))}
+                </div>
+                <p className="font-sans text-xs text-on-surface-variant">{stats.count} avis</p>
+              </div>
+
+              {/* Barres de distribution */}
+              <div className="flex-1 space-y-1.5">
+                {[5,4,3,2,1].map(star => {
+                  const count = stats.dist[star - 1];
+                  const pct = stats.count > 0 ? (count / stats.count) * 100 : 0;
+                  return (
+                    <div key={star} className="flex items-center gap-2">
+                      <span className="font-sans text-xs text-on-surface-variant w-4 text-right shrink-0">{star}</span>
+                      <span className="material-symbols-outlined text-xs text-primary shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>star</span>
+                      <div className="flex-1 h-2 bg-surface-container-high rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${pct}%` }} />
+                      </div>
+                      <span className="font-sans text-xs text-on-surface-variant w-4 shrink-0">{count}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center py-8 text-center">
+              <div className="flex mb-3">
+                {[1,2,3,4,5].map(s => (
+                  <span key={s} className="material-symbols-outlined text-3xl text-outline-variant/50" style={{ fontVariationSettings: "'FILL' 0" }}>star</span>
+                ))}
+              </div>
+              <p className="font-sans text-base text-on-surface font-semibold mb-1">Aucun avis pour le moment</p>
+              <p className="font-sans text-sm text-on-surface-variant">Partagez votre expérience avec ce produit</p>
+            </div>
+          )}
+        </div>
+
+        {/* Formulaire */}
+        <div>
+          <p className="font-sans text-sm font-bold uppercase tracking-wider text-on-surface mb-4">Laisser un avis</p>
+
+          {submitState === "success" ? (
+            <div className="flex items-start gap-3 p-4 bg-secondary/10 border border-secondary/30">
+              <span className="material-symbols-outlined text-secondary text-xl shrink-0 mt-0.5">check_circle</span>
+              <div>
+                <p className="font-sans text-sm font-semibold text-on-surface">Merci pour votre avis !</p>
+                <p className="font-sans text-sm text-on-surface-variant">Il sera visible après validation par notre équipe.</p>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Votre note *
+                </label>
+                <StarPicker value={rating} onChange={setRating} />
+                {rating > 0 && (
+                  <p className="font-sans text-xs text-on-surface-variant mt-1">{STAR_LABELS[rating]}</p>
+                )}
+              </div>
+
+              <div>
+                <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Votre prénom *
+                </label>
+                <input
+                  type="text" required maxLength={100}
+                  value={name} onChange={e => setName(e.target.value)}
+                  placeholder="Ex : Marie"
+                  className="w-full h-10 px-3 border border-outline-variant bg-surface font-sans text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary transition-colors" />
+              </div>
+
+              <div>
+                <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Votre commentaire
+                </label>
+                <textarea
+                  rows={3} maxLength={1000}
+                  value={body} onChange={e => setBody(e.target.value)}
+                  placeholder="Partagez votre expérience avec ce produit…"
+                  className="w-full px-3 py-2 border border-outline-variant bg-surface font-sans text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary transition-colors resize-none" />
+              </div>
+
+              {submitState === "error" && (
+                <p className="font-sans text-xs text-error">Une erreur est survenue. Veuillez réessayer.</p>
+              )}
+
+              <button type="submit"
+                disabled={submitState === "loading" || rating === 0 || !name.trim()}
+                className="px-6 py-2.5 bg-primary text-on-primary font-sans text-sm font-bold uppercase tracking-widest hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">
+                {submitState === "loading" ? "Envoi…" : "Publier mon avis"}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
+
+      {/* Liste des avis */}
+      {reviews.length > 0 && (
+        <div className="space-y-0 divide-y divide-outline-variant/30 border-t border-outline-variant">
+          {reviews.map(r => (
+            <div key={r.id} className="py-6">
+              <div className="flex items-start justify-between gap-4 mb-2">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                    <span className="font-sans text-sm font-bold text-primary">
+                      {r.customer_name.charAt(0).toUpperCase()}
+                    </span>
+                  </div>
+                  <div>
+                    <p className="font-sans text-sm font-semibold text-on-surface">{r.customer_name}</p>
+                    <div className="flex">
+                      {[1,2,3,4,5].map(s => (
+                        <span key={s} className="material-symbols-outlined text-xs"
+                          style={{ color: s <= r.rating ? "var(--color-primary)" : "var(--color-outline-variant)", fontVariationSettings: "'FILL' 1" }}>
+                          star
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <p className="font-sans text-xs text-on-surface-variant shrink-0">
+                  {new Date(r.created_at).toLocaleDateString("fr-CA", { year: "numeric", month: "long", day: "numeric" })}
+                </p>
+              </div>
+              {r.body && <p className="font-sans text-sm text-on-surface-variant leading-relaxed ml-11">{r.body}</p>}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Sub-components ─────────────────────────────────────────────────────────
+
+function SpecRow({ icon, label, value }: { icon: string; label: string; value: string }) {
+  return (
+    <div className="flex items-start gap-2">
+      <span className="material-symbols-outlined text-primary text-[18px] mt-0.5 shrink-0">{icon}</span>
+      <div>
+        <p className="font-sans text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</p>
+        <p className="font-sans text-sm font-semibold text-on-surface">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function OptionTag({ icon, label }: { icon: string; label: string }) {
+  return (
+    <span className="flex items-center gap-1.5 px-3 py-1.5 bg-primary/8 border border-primary/20 text-primary font-sans text-xs font-semibold">
+      <span className="material-symbols-outlined text-sm">{icon}</span>
+      {label}
+    </span>
+  );
+}
+
+function TrustBadge({ icon, label, sub }: { icon: string; label: string; sub: string }) {
+  return (
+    <div className="flex flex-col items-center text-center gap-1.5 py-3">
+      <span className="material-symbols-outlined text-primary text-2xl">{icon}</span>
+      <p className="font-sans text-xs font-bold text-on-surface leading-tight">{label}</p>
+      <p className="font-sans text-[10px] text-on-surface-variant">{sub}</p>
+    </div>
+  );
+}
+
+function Accordion({ id, label, open, onToggle, children }: {
+  id: string; label: string;
+  open: string | null; onToggle: (id: string | null) => void;
+  children: React.ReactNode;
+}) {
+  const isOpen = open === id;
+  return (
+    <div className="border-b border-outline-variant">
+      <button onClick={() => onToggle(isOpen ? null : id)}
+        className="w-full flex items-center justify-between py-5 font-sans text-base font-semibold text-on-surface hover:text-primary transition-colors text-left">
+        {label}
+        <span className={`material-symbols-outlined text-xl transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}>
+          expand_more
+        </span>
+      </button>
+      {isOpen && <div className="pb-6">{children}</div>}
+    </div>
+  );
+}
+
+const TEXTURE_SHORT: Record<string, string> = {
+  "lisse": "Lisse", "body-wave": "Body Wave", "water-wave": "Water Wave",
+  "deep-wave": "Deep Wave", "loose-wave": "Loose Wave", "boucle": "Bouclé",
+  "kinky-curly": "Kinky Curly", "bob": "Bob",
+};
+
+function RelatedCard({ product: p }: { product: Product }) {
+  const discount = p.compare_at_price_cad && p.compare_at_price_cad > p.price_cad
+    ? Math.round((1 - p.price_cad / p.compare_at_price_cad) * 100)
+    : null;
+  return (
+    <Link to={`/boutique/${p.slug}`} className="group block">
+      <div className="aspect-[3/4] bg-surface-container overflow-hidden relative mb-3">
+        {p.image_key ? (
+          <img src={p.image_key} alt={p.name}
+            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+        ) : (
+          <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
+            <span className="material-symbols-outlined text-3xl text-outline-variant">styler</span>
+          </div>
+        )}
+        {discount && (
+          <span className="absolute top-2 left-2 bg-error text-on-error text-[10px] font-bold px-2 py-0.5 uppercase">
+            -{discount}%
+          </span>
+        )}
+      </div>
+      <p className="font-serif text-sm text-on-surface mb-1 leading-snug group-hover:text-primary transition-colors">{p.name}</p>
+      <div className="flex flex-wrap gap-1 mb-1.5">
+        {p.texture && <span className="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded-sm">{TEXTURE_SHORT[p.texture] ?? p.texture}</span>}
+        {p.longueur_po && <span className="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded-sm">{p.longueur_po} po</span>}
+      </div>
+      <div className="flex items-center gap-2">
+        <p className="font-sans text-sm font-bold text-primary">{p.price_cad.toFixed(2)} $ CAD</p>
+        {p.compare_at_price_cad && p.compare_at_price_cad > p.price_cad && (
+          <p className="font-sans text-xs text-on-surface-variant line-through">{p.compare_at_price_cad.toFixed(2)} $</p>
+        )}
+      </div>
+    </Link>
+  );
+}

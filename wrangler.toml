@@ -1,6 +1,7 @@
 name = "ddm-wigs"
 compatibility_date = "2024-11-01"
-pages_build_output_dir = "public"
+compatibility_flags = ["nodejs_compat"]
+pages_build_output_dir = "build/client"
 
 [[d1_databases]]
 binding = "DB"
@@ -14,6 +15,10 @@ bucket_name = "ddm-wigs-assets"
 [[kv_namespaces]]
 binding = "CACHE"
 id = "5927b4f2125d40af8892a7edf81f4802"
+
+send_email = [
+  { name = "EMAIL", allowed_destination_addresses = ["davesihanou@gmail.com"] }
+]
 
 [vars]
 ENVIRONMENT = "production"
