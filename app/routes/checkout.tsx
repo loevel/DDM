@@ -77,16 +77,20 @@ export default function Checkout() {
       .catch(() => setCartLoaded(true));
   }, []);
 
-  // Pré-remplir depuis compte si connecté
+  // Pré-remplir depuis compte si connecté (profil + adresse par défaut)
   useEffect(() => {
     fetch("/api/me").then(r => r.ok ? r.json() : null)
       .then((me: any) => {
         if (!me) return;
         setCustomerInfo(prev => ({
           ...prev,
-          name: me.name || prev.name,
-          email: me.email || prev.email,
-          phone: me.phone || prev.phone,
+          name:        me.name        || prev.name,
+          email:       me.email       || prev.email,
+          phone:       me.phone       || prev.phone,
+          line1:       me.address?.street      || prev.line1,
+          city:        me.address?.city        || prev.city,
+          province:    me.address?.province    || prev.province,
+          postal_code: me.address?.postal_code || prev.postal_code,
         }));
       }).catch(() => {});
   }, []);
