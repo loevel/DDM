@@ -1,0 +1,32 @@
+<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <style>
+      .icon-circle { fill: none; stroke: #D4AF37; stroke-width: 6; }
+      .icon-text { fill: #1a1a1a; font-family: 'Georgia', serif; font-size: 48px; font-weight: bold; letter-spacing: 3px; }
+      .icon-line { stroke: #D4AF37; stroke-width: 1.5; fill: none; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="200" height="200" fill="#FAFAF8" rx="10"/>
+
+  <!-- Circle -->
+  <circle cx="100" cy="100" r="95" class="icon-circle"/>
+
+  <!-- Simplified woman profile -->
+  <g transform="translate(70, 35)">
+    <!-- Hair -->
+    <path d="M 20 8 Q 18 15, 20 25 Q 18 32, 22 38 Q 28 42, 35 40 Q 40 38, 41 32 Q 43 25, 41 18 Q 40 10, 35 6 Q 30 4, 20 8 Z" class="icon-line" fill="#D4AF37" opacity="0.2"/>
+
+    <!-- Profile -->
+    <path d="M 20 10 Q 28 8, 35 12 Q 40 16, 40 25 Q 40 35, 35 40" class="icon-line" stroke-width="1"/>
+
+    <!-- Flower crown (small dots) -->
+    <circle cx="18" cy="5" r="1.5" fill="#D4AF37"/>
+    <circle cx="28" cy="3" r="1.5" fill="#D4AF37"/>
+    <circle cx="37" cy="6" r="1.5" fill="#D4AF37"/>
+  </g>
+
+  <!-- DDM Text -->
+  <text x="100" y="135" text-anchor="middle" class="icon-text">DDM</text>
+</svg>
