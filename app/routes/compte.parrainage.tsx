@@ -7,7 +7,7 @@ import { getCustomer } from "~/lib/auth.server";
 
 export const meta: MetaFunction = () => [{ title: "Parrainage — DDM Wigs & More" }];
 
-const BASE = "https://ddm-wigs.pages.dev";
+const BASE = "https://ddmwigs.com";
 const REWARD_REFERRER = 15;
 const DISCOUNT_REFERRED = 10;
 

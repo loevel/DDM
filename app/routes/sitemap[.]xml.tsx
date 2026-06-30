@@ -1,7 +1,7 @@
 import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { getDB } from "~/lib/db.server";
 
-const BASE = "https://ddm-wigs.pages.dev";
+const BASE = "https://ddmwigs.com";
 
 const STATIC = [
   { url: "/",               priority: "1.0", changefreq: "weekly" },

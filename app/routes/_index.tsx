@@ -6,7 +6,7 @@ import { cfImage } from "~/lib/images";
 import { getDB, getProducts } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
 
-const BASE = "https://ddm-wigs.pages.dev";
+const BASE = "https://ddmwigs.com";
 const SITE_DESC = "Perruques en cheveux humains 100% — Lace front, HD lace, glueless. Livraison rapide au Canada. DDM Wigs & More, Montréal.";
 
 export const meta: MetaFunction = () => [

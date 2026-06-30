@@ -37,14 +37,14 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
   return json({ collection, products: products ?? [], ratingMap });
 }
 
-const BASE = "https://ddm-wigs.pages.dev";
+const BASE = "https://ddmwigs.com";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   const name = data?.collection.name ?? "Collection";
   const slug = data?.collection.slug ?? "";
   const title = `${name} — DDM Wigs & More`;
   const description = data?.collection.description ?? `Découvrez la collection ${name} — perruques cheveux humains premium.`;
-  const url = `https://ddm-wigs.pages.dev/collections/${slug}`;
+  const url = `https://ddmwigs.com/collections/${slug}`;
   return [
     { title },
     { name: "description", content: description },

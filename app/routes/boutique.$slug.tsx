@@ -140,7 +140,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
   return json({ product, media, related, longueurVars, couleurVars, reviews, reviewStats, flash, qa });
 }
 
-const BASE = "https://ddm-wigs.pages.dev";
+const BASE = "https://ddmwigs.com";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   if (!data) return [{ title: "Produit — DDM Wigs" }];

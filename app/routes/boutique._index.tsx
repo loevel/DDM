@@ -7,7 +7,7 @@ import type { Product } from "~/lib/db.server";
 import { cfImage } from "~/lib/images";
 import { DEMO_PRODUCTS } from "~/lib/demo-products";
 
-const BASE = "https://ddm-wigs.pages.dev";
+const BASE = "https://ddmwigs.com";
 
 export const meta: MetaFunction = () => {
   const title = "Boutique — DDM Wigs & More";

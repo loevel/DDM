@@ -6,7 +6,7 @@ export async function loader() {
     "Disallow: /api/",
     "Disallow: /compte/",
     "",
-    "Sitemap: https://ddm-wigs.pages.dev/sitemap.xml",
+    "Sitemap: https://ddmwigs.com/sitemap.xml",
   ].join("\n");
 
   return new Response(content, {
