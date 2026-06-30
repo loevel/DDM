@@ -41,6 +41,42 @@ export async function action({ request, context }: ActionFunctionArgs) {
       .bind(pi.payment_method_types?.[0] ?? "card", pi.id)
       .run();
 
+    // Décrémenter stock + créer mouvements de vente pour chaque article
+    try {
+      const paidOrder = await db
+        .prepare("SELECT id FROM orders WHERE stripe_payment_intent_id = ?")
+        .bind(pi.id)
+        .first<{ id: number }>();
+
+      if (paidOrder) {
+        const { results: items } = await db
+          .prepare("SELECT product_id, quantity, unit_price_cad FROM order_items WHERE order_id = ?")
+          .bind(paidOrder.id)
+          .all<{ product_id: number; quantity: number; unit_price_cad: number }>();
+
+        for (const item of items ?? []) {
+          if (!item.product_id) continue;
+          const product = await db
+            .prepare("SELECT stock FROM products WHERE id = ?")
+            .bind(item.product_id)
+            .first<{ stock: number }>();
+          if (!product) continue;
+
+          const stockAvant = product.stock;
+          const stockApres = Math.max(0, stockAvant - item.quantity);
+
+          await db.prepare("UPDATE products SET stock = ? WHERE id = ?")
+            .bind(stockApres, item.product_id).run();
+
+          await db.prepare(`INSERT INTO stock_mouvements
+            (product_id, type, quantite, stock_avant, stock_apres, cout_unitaire_cad, reference_type, reference_id)
+            VALUES (?, 'vente', ?, ?, ?, ?, 'order', ?)`)
+            .bind(item.product_id, item.quantity, stockAvant, stockApres, item.unit_price_cad, paidOrder.id)
+            .run();
+        }
+      }
+    } catch { /* ne pas bloquer le webhook si erreur stock */ }
+
     // Sauvegarder l'adresse de livraison si la cliente n'en a pas encore
     try {
       const order = await db

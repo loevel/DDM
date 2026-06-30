@@ -32,16 +32,40 @@ export async function loader({ context }: LoaderFunctionArgs) {
     ORDER BY sm.created_at DESC LIMIT 50
   `).all();
 
+  // Ventes réelles depuis les commandes payées
+  const statsCommandes = await db.prepare(`
+    SELECT
+      COUNT(*) as nb_commandes,
+      COALESCE(SUM(total_cad), 0) as ca_total,
+      COALESCE(SUM(CASE WHEN created_at >= date('now', '-30 days') THEN total_cad ELSE 0 END), 0) as ca_30j,
+      COALESCE(SUM(CASE WHEN created_at >= date('now', '-7 days') THEN total_cad ELSE 0 END), 0) as ca_7j,
+      COUNT(CASE WHEN created_at >= date('now', '-30 days') THEN 1 END) as commandes_30j
+    FROM orders WHERE payment_status = 'paid'
+  `).first();
+
+  const { results: topProduits } = await db.prepare(`
+    SELECT oi.product_name, oi.product_id,
+      SUM(oi.quantity) as qte_vendue,
+      SUM(oi.quantity * oi.unit_price_cad) as ca_produit
+    FROM order_items oi
+    JOIN orders o ON o.id = oi.order_id
+    WHERE o.payment_status = 'paid'
+    GROUP BY oi.product_id, oi.product_name
+    ORDER BY qte_vendue DESC LIMIT 10
+  `).all();
+
   return json({
     products: products ?? [],
     commandesFournisseurs: commandesFournisseurs ?? [],
     retours: retours ?? [],
     mouvementsRecents: mouvementsRecents ?? [],
+    statsCommandes: statsCommandes ?? { nb_commandes: 0, ca_total: 0, ca_30j: 0, ca_7j: 0, commandes_30j: 0 },
+    topProduits: topProduits ?? [],
   });
 }
 
 export default function AdminAnalytique() {
-  const { products, commandesFournisseurs, retours, mouvementsRecents } = useLoaderData<typeof loader>();
+  const { products, commandesFournisseurs, retours, mouvementsRecents, statsCommandes, topProduits } = useLoaderData<typeof loader>();
   const ps = products as any[];
   const cfs = commandesFournisseurs as any[];
   const rets = retours as any[];
@@ -114,7 +138,43 @@ export default function AdminAnalytique() {
         <p className="text-xs text-on-surface-variant">Taux USD/CAD indicatif: {TAUX}</p>
       </div>
 
-      {/* KPIs principaux */}
+      {/* Ventes réelles (commandes Stripe payées) */}
+      <div className="bg-primary/5 border border-primary/20 p-5">
+        <h2 className="font-semibold text-on-surface mb-4 flex items-center gap-2">
+          <span className="material-symbols-outlined text-primary">payments</span>
+          Ventes réelles — commandes payées
+        </h2>
+        <div className="grid grid-cols-4 gap-4">
+          <KpiCard icon="storefront" label="CA total" value={`${Number((statsCommandes as any).ca_total).toFixed(0)} $`} sub="depuis le début" accent />
+          <KpiCard icon="calendar_month" label="CA 30 derniers jours" value={`${Number((statsCommandes as any).ca_30j).toFixed(0)} $`} accent />
+          <KpiCard icon="calendar_today" label="CA 7 derniers jours" value={`${Number((statsCommandes as any).ca_7j).toFixed(0)} $`} />
+          <KpiCard icon="receipt_long" label="Commandes payées" value={String((statsCommandes as any).nb_commandes)} sub={`dont ${(statsCommandes as any).commandes_30j} ce mois`} />
+        </div>
+        {(topProduits as any[]).length > 0 && (
+          <div className="mt-5">
+            <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Top produits vendus</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(topProduits as any[]).map((p, i) => (
+                <div key={p.product_id ?? i} className="flex items-center justify-between bg-surface px-3 py-2 border border-outline-variant/20">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-primary w-4">{i + 1}</span>
+                    <p className="text-xs text-on-surface truncate max-w-[160px]">{p.product_name ?? `Produit #${p.product_id}`}</p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className="text-xs font-semibold text-on-surface">{Number(p.ca_produit).toFixed(0)} $</p>
+                    <p className="text-[10px] text-on-surface-variant">{p.qte_vendue} unité{p.qte_vendue > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {(topProduits as any[]).length === 0 && (
+          <p className="text-xs text-on-surface-variant mt-3">Aucune commande payée pour l'instant. Les données apparaîtront ici dès la première vente confirmée par Stripe.</p>
+        )}
+      </div>
+
+      {/* KPIs stock */}
       <div className="grid grid-cols-4 gap-4">
         <KpiCard icon="inventory_2" label="Valeur stock (coût)" value={`${valeurStockCout.toFixed(0)} $`} sub="CAD" />
         <KpiCard icon="sell" label="Valeur stock (vente)" value={`${valeurStockVente.toFixed(0)} $`} sub="CAD" accent />
