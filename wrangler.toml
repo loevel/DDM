@@ -20,7 +20,7 @@ id = "5927b4f2125d40af8892a7edf81f4802"
 ENVIRONMENT = "production"
 CF_ACCOUNT_ID = ""     # à remplir — visible dans le tableau de bord Cloudflare (URL: dash.cloudflare.com → Images)
 CF_ACCOUNT_HASH = ""   # à remplir — visible dans Images → "Account Hash"
-STRIPE_PUBLISHABLE_KEY = ""  # à remplir — Stripe Dashboard → Developers → API keys → Publishable key (pk_live_...)
+STRIPE_PUBLISHABLE_KEY = "pk_test_51To5SLCwRXKOK4kRwNv5H4nDUA3rP7rAIcjeqEvwKnAUMcOQkQsU2tLx1oSY60uO9w9lt20ucobWBM4nvJpet8zY00TzK56XYk"
 # Secrets (à ajouter dans Cloudflare Pages → Settings → Environment variables) :
 # RESEND_API_KEY        — resend.com → API Keys → Create API Key
 # CF_IMAGES_TOKEN    — token Cloudflare Images
