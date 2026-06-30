@@ -1,7 +1,7 @@
 import { json, redirect } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { useFetcher, useLoaderData } from "@remix-run/react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { isAdminAuthenticated } from "~/lib/admin-session.server";
 
 interface FlashSale {
@@ -99,16 +99,17 @@ const STATUS_LABELS = {
 };
 
 function Countdown({ endsAt }: { endsAt: string }) {
-  const [left, setLeft] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()));
+  const [left, setLeft] = useState(0); // 0 on SSR, real value set by useEffect on client
 
-  useState(() => {
+  useEffect(() => {
+    setLeft(Math.max(0, new Date(endsAt).getTime() - Date.now()));
     const id = setInterval(() => {
       const ms = Math.max(0, new Date(endsAt).getTime() - Date.now());
       setLeft(ms);
       if (ms === 0) clearInterval(id);
     }, 1000);
     return () => clearInterval(id);
-  });
+  }, [endsAt]);
 
   const s = Math.floor(left / 1000);
   const pad = (n: number) => String(n).padStart(2, "0");

@@ -2,12 +2,28 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
 import { json } from "@remix-run/cloudflare";
 import { useLoaderData, Link } from "@remix-run/react";
 import { useEffect, useState } from "react";
+import { cfImage } from "~/lib/images";
 import { getDB, getProducts } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
 
+const BASE = "https://ddm-wigs.pages.dev";
+const SITE_DESC = "Perruques en cheveux humains 100% — Lace front, HD lace, glueless. Livraison rapide au Canada. DDM Wigs & More, Montréal.";
+
 export const meta: MetaFunction = () => [
-  { title: "DDM Wigs & More | Solutions Capillaires Premium" },
-  { name: "description", content: "Découvrez le summum du luxe avec nos solutions capillaires premium. Conçues pour la femme exigeante qui privilégie la confiance et le style." },
+  { title: "DDM Wigs & More | Perruques Cheveux Humains — Montréal" },
+  { name: "description", content: SITE_DESC },
+  { tagName: "link", rel: "canonical", href: BASE + "/" },
+  // Open Graph
+  { property: "og:type",        content: "website" },
+  { property: "og:title",       content: "DDM Wigs & More | Perruques Cheveux Humains — Montréal" },
+  { property: "og:description", content: SITE_DESC },
+  { property: "og:url",         content: BASE + "/" },
+  { property: "og:site_name",   content: "DDM Wigs & More" },
+  { property: "og:locale",      content: "fr_CA" },
+  // Twitter
+  { name: "twitter:card",        content: "summary_large_image" },
+  { name: "twitter:title",       content: "DDM Wigs & More | Perruques Cheveux Humains — Montréal" },
+  { name: "twitter:description", content: SITE_DESC },
 ];
 
 interface FlashProduct extends Product {
@@ -37,8 +53,9 @@ export async function loader({ context }: LoaderFunctionArgs) {
 }
 
 function useFlashCountdown(endsAt: string) {
-  const [left, setLeft] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()));
+  const [left, setLeft] = useState(0); // 0 on SSR, real value set by useEffect on client
   useEffect(() => {
+    setLeft(Math.max(0, new Date(endsAt).getTime() - Date.now()));
     const id = setInterval(() => {
       const ms = Math.max(0, new Date(endsAt).getTime() - Date.now());
       setLeft(ms);
@@ -90,8 +107,32 @@ export default function Index() {
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
+  const websiteLd = {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    name: "DDM Wigs & More",
+    url: BASE,
+    potentialAction: {
+      "@type": "SearchAction",
+      target: { "@type": "EntryPoint", urlTemplate: `${BASE}/boutique?q={search_term_string}` },
+      "query-input": "required name=search_term_string",
+    },
+  };
+
+  const orgLd = {
+    "@context": "https://schema.org",
+    "@type": "LocalBusiness",
+    name: "DDM Wigs & More",
+    url: BASE,
+    description: SITE_DESC,
+    address: { "@type": "PostalAddress", addressLocality: "Montréal", addressRegion: "QC", addressCountry: "CA" },
+    contactPoint: { "@type": "ContactPoint", contactType: "customer service", availableLanguage: ["French", "English"] },
+  };
+
   return (
     <>
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }} />
       <HeroCarousel />
 
       {/* Garantie Pour Vous */}
@@ -220,7 +261,7 @@ export default function Index() {
                   <Link key={p.id} to={`/boutique/${p.slug}`} className="group bg-on-surface p-4 hover:bg-white/5 transition-colors">
                     <div className="relative aspect-[4/5] overflow-hidden mb-3">
                       {p.image_key ? (
-                        <img alt={p.name} src={p.image_key}
+                        <img alt={p.name} src={cfImage(p.image_key, "card") ?? p.image_key}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       ) : (
                         <div className="w-full h-full bg-white/5 flex items-center justify-center">
@@ -264,7 +305,7 @@ export default function Index() {
                     <img
                       alt={product.name}
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                      src={product.image_key}
+                      src={cfImage(product.image_key, "card") ?? product.image_key}
                     />
                   )}
                   <div className="absolute top-4 left-4">
@@ -308,50 +349,6 @@ export default function Index() {
         </div>
       </section>
 
-      {/* Flash Vente Section */}
-      <section className="mt-section-gap-desktop bg-on-surface py-20 overflow-hidden relative">
-        <div className="absolute right-0 top-1/2 -translate-y-1/2 opacity-20 pointer-events-none">
-          <img
-            alt="Promo Decor"
-            className="h-[600px] w-auto"
-            style={{ animation: "pulse-soft 3s infinite" }}
-            src="https://lh3.googleusercontent.com/aida/AP1WRLv-7RTtUbNUUxYx6LApItv_U9grg389-1NuF0m9cyIKf12v43ciK8F3D3rC9hOUxoBhvmK1bKUlE0wAT52Hv7-u2Bdcc7rcUK68gbGUC0rkkmHFv6zchuvog3LGba8qTezf5KKE5X5Y0ksrt5_s6Y0LRsHSMLDTUINaKLW8yCTCYvbns74luDroQNTQAcj__KgXeo2kpwQqfJ61xGc5gP4zPoUDWeuQvHrvrm1k4NzrB0QyhauvpjvIUUw"
-          />
-        </div>
-        <div className="max-w-container-max-width mx-auto px-grid-margin-desktop relative z-10 flex flex-col md:flex-row items-center justify-between gap-12">
-          <div className="text-white space-y-6 md:w-1/2">
-            <span className="text-primary-fixed font-label-md tracking-widest uppercase">Offre à Temps Limité</span>
-            <h2 className="font-headline-xl text-headline-xl leading-tight italic">Acheter 1 Obtenir 1 <span className="text-primary-fixed">à -50%</span></h2>
-            <p className="font-body-lg text-surface-variant max-w-md">L'occasion idéale pour renouveler votre collection ou essayer une nouvelle texture. Valable sur une sélection d'articles.</p>
-            <div className="flex gap-8 py-4">
-              <div className="text-center">
-                <span className="block text-4xl font-headline-md text-primary-fixed">12</span>
-                <span className="text-[10px] uppercase tracking-widest opacity-60">Heures</span>
-              </div>
-              <div className="text-center">
-                <span className="block text-4xl font-headline-md text-primary-fixed">48</span>
-                <span className="text-[10px] uppercase tracking-widest opacity-60">Minutes</span>
-              </div>
-              <div className="text-center">
-                <span className="block text-4xl font-headline-md text-primary-fixed">15</span>
-                <span className="text-[10px] uppercase tracking-widest opacity-60">Secondes</span>
-              </div>
-            </div>
-            <button className="px-10 py-4 bg-primary-fixed text-on-primary-fixed font-label-md text-label-md rounded-sm hover:bg-white transition-all duration-300">Profiter de l'Offre</button>
-          </div>
-          <div className="md:w-1/3 flex justify-center">
-            <div className="relative w-64 h-80 bg-white/5 backdrop-blur-md rounded-xl p-6 border border-white/10 flex flex-col items-center justify-center text-center shadow-2xl">
-              <img
-                alt="Promo Ticket"
-                className="w-48 mb-4 drop-shadow-xl"
-                src="https://lh3.googleusercontent.com/aida/AP1WRLv5lLzousw5v8mjRs-v4s_qDAVGJUZfts74oiUwCLyQMVHClWJKUNJ56R9Gwor8AryW43C5P5hf5Kj3PTxREbSuZaZWK-qQgSZA11uSwtsG9c2MsjE06NPUK31ZOuExjavYaJMziNqZ0scTZ5ulrvwOVKZVI6jVHR87Hhw1yYz7HjFNtSB16xEAp23QE5ZLU0gcM-PstXepsM97FuDbPwb8Bs3AQrqBwhT09QaVIkMoF0Hy53Hc2FLCmpw"
-              />
-              <p className="text-white/60 text-xs font-label-md tracking-tighter">COUPON CODE: DDM50OFF</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
       {/* VIP Insider Reward */}
       <section className="mt-section-gap-desktop bg-surface-container-high py-section-gap-desktop relative overflow-hidden">
         <div className="max-w-container-max-width mx-auto px-grid-margin-desktop text-center relative z-10">
@@ -378,12 +375,6 @@ export default function Index() {
         </div>
       </section>
 
-      <style dangerouslySetInnerHTML={{ __html: `
-        @keyframes pulse-soft {
-          0%, 100% { transform: scale(1); }
-          50% { transform: scale(1.05); }
-        }
-      ` }} />
     </>
   );
 }

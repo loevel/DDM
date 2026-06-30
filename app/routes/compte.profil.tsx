@@ -1,4 +1,4 @@
-import { json, redirect } from "@remix-run/cloudflare";
+import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
 import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { getCustomer } from "~/lib/auth.server";
@@ -26,7 +26,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     .bind(customerId)
     .all<Address>();
 
-  return json({ customer, addresses: addresses.results });
+  const prefs = await context.cloudflare.env.DB
+    .prepare("SELECT cap_size, texture_preferee, longueur_preferee, couleur_naturelle, style_pose, budget_habituel, date_naissance, newsletter_optin, alertes_stock FROM customers WHERE id = ?")
+    .bind(customerId)
+    .first<any>();
+
+  return json({ customer, addresses: addresses.results, prefs: prefs ?? {} });
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -37,13 +42,32 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (intent === "update-profile") {
     const name = String(form.get("name") ?? "").trim();
     const phone = String(form.get("phone") ?? "").trim();
+    const date_naissance = String(form.get("date_naissance") ?? "").trim();
 
     await context.cloudflare.env.DB
-      .prepare("UPDATE customers SET name = ?, phone = ?, updated_at = datetime('now') WHERE id = ?")
-      .bind(name || null, phone || null, customerId)
+      .prepare("UPDATE customers SET name = ?, phone = ?, date_naissance = ?, updated_at = datetime('now') WHERE id = ?")
+      .bind(name || null, phone || null, date_naissance || null, customerId)
       .run();
 
     return json({ success: "Profil mis à jour." });
+  }
+
+  if (intent === "update-preferences") {
+    const g = (k: string) => String(form.get(k) ?? "").trim() || null;
+    await context.cloudflare.env.DB
+      .prepare(`UPDATE customers SET
+        cap_size = ?, texture_preferee = ?, longueur_preferee = ?,
+        couleur_naturelle = ?, style_pose = ?, budget_habituel = ?,
+        newsletter_optin = ?, alertes_stock = ?,
+        updated_at = datetime('now') WHERE id = ?`)
+      .bind(
+        g("cap_size"), g("texture_preferee"), g("longueur_preferee"),
+        g("couleur_naturelle"), g("style_pose"), g("budget_habituel"),
+        form.get("newsletter_optin") === "1" ? 1 : 0,
+        form.get("alertes_stock") === "1" ? 1 : 0,
+        customerId
+      ).run();
+    return json({ success: "Préférences enregistrées." });
   }
 
   if (intent === "add-address") {
@@ -80,7 +104,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function Profil() {
-  const { customer, addresses } = useLoaderData<typeof loader>();
+  const { customer, addresses, prefs } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -149,12 +173,123 @@ export default function Profil() {
             />
             <label className="absolute left-0 -top-1 text-xs text-on-surface-variant font-label-md">Email (non modifiable)</label>
           </div>
+          <div className="relative">
+            <input type="date" name="date_naissance" id="dob"
+              defaultValue={(prefs as any)?.date_naissance ?? ""}
+              className="peer w-full pt-5 pb-2 border-b border-outline-variant bg-transparent focus:outline-none focus:border-primary font-body-md text-body-md transition-colors pl-0" />
+            <label htmlFor="dob" className="absolute left-0 -top-1 text-xs text-on-surface-variant font-label-md">
+              Date de naissance <span className="text-on-surface-variant/50 font-normal">(pour vos offres anniversaire)</span>
+            </label>
+          </div>
           <button
             type="submit"
             disabled={saving}
             className="bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider px-8 py-3 hover:bg-on-primary-container transition-colors duration-200 disabled:opacity-60"
           >
             {saving ? "Enregistrement…" : "Enregistrer"}
+          </button>
+        </Form>
+      </div>
+
+      {/* Préférences capillaires */}
+      <div className="bg-surface border border-outline-variant/30 rounded-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-outline-variant/20 bg-on-surface flex items-center gap-3">
+          <span className="material-symbols-outlined text-primary-fixed text-xl">styler</span>
+          <h2 className="font-headline-sm text-headline-sm text-white">Mes préférences capillaires</h2>
+        </div>
+        <Form method="post" className="px-6 py-6 space-y-6">
+          <input type="hidden" name="intent" value="update-preferences" />
+          <p className="text-xs text-on-surface-variant">Ces informations nous permettent de vous recommander les perruques les plus adaptées à votre profil.</p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Texture préférée</label>
+              <select name="texture_preferee" defaultValue={(prefs as any)?.texture_preferee ?? ""}
+                className="w-full border-b border-outline-variant bg-transparent focus:outline-none focus:border-primary font-body-md text-body-md py-2">
+                <option value="">— Choisir —</option>
+                <option value="lisse">Lisse & soyeux (Straight)</option>
+                <option value="ondule">Ondulé naturel (Body wave, Water wave)</option>
+                <option value="boucle">Bouclé & volume (Kinky curly, Deep wave)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Longueur préférée</label>
+              <select name="longueur_preferee" defaultValue={(prefs as any)?.longueur_preferee ?? ""}
+                className="w-full border-b border-outline-variant bg-transparent focus:outline-none focus:border-primary font-body-md text-body-md py-2">
+                <option value="">— Choisir —</option>
+                <option value="courte">Courte (10–14 po)</option>
+                <option value="mi-longue">Mi-longue (16–20 po)</option>
+                <option value="longue">Longue (22–26 po)</option>
+                <option value="tres-longue">Très longue (28 po et plus)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Tour de tête (Cap size)</label>
+              <select name="cap_size" defaultValue={(prefs as any)?.cap_size ?? ""}
+                className="w-full border-b border-outline-variant bg-transparent focus:outline-none focus:border-primary font-body-md text-body-md py-2">
+                <option value="">— Choisir —</option>
+                <option value="Petite">Petite (53–55 cm)</option>
+                <option value="Moyenne">Moyenne (55–57 cm)</option>
+                <option value="Grande">Grande (57–59 cm)</option>
+                <option value="Universelle">Universelle (ajustable)</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Couleur naturelle de vos cheveux</label>
+              <select name="couleur_naturelle" defaultValue={(prefs as any)?.couleur_naturelle ?? ""}
+                className="w-full border-b border-outline-variant bg-transparent focus:outline-none focus:border-primary font-body-md text-body-md py-2">
+                <option value="">— Choisir —</option>
+                <option value="noir">Noir naturel</option>
+                <option value="brun-fonce">Brun foncé</option>
+                <option value="brun-clair">Brun clair</option>
+                <option value="chatain">Châtain</option>
+                <option value="blond">Blond</option>
+                <option value="roux">Roux</option>
+                <option value="gris">Gris / Blanc</option>
+                <option value="teint">Teint / Coloré</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Style de pose préféré</label>
+              <select name="style_pose" defaultValue={(prefs as any)?.style_pose ?? ""}
+                className="w-full border-b border-outline-variant bg-transparent focus:outline-none focus:border-primary font-body-md text-body-md py-2">
+                <option value="">— Choisir —</option>
+                <option value="glueless">Glueless (sans colle)</option>
+                <option value="glue">Avec colle (lace glue)</option>
+                <option value="tape">Tape-in</option>
+                <option value="peu_importe">Peu importe</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-2">Budget habituel</label>
+              <select name="budget_habituel" defaultValue={(prefs as any)?.budget_habituel ?? ""}
+                className="w-full border-b border-outline-variant bg-transparent focus:outline-none focus:border-primary font-body-md text-body-md py-2">
+                <option value="">— Choisir —</option>
+                <option value="budget1">Moins de 400 $</option>
+                <option value="budget2">400 $ – 600 $</option>
+                <option value="budget3">600 $ et plus</option>
+              </select>
+            </div>
+          </div>
+          <div className="border-t border-outline-variant/20 pt-5 space-y-3">
+            <p className="text-xs font-semibold text-on-surface-variant uppercase tracking-wider mb-3">Préférences de communication</p>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="hidden" name="newsletter_optin" value="0" />
+              <input type="checkbox" name="newsletter_optin" value="1"
+                defaultChecked={(prefs as any)?.newsletter_optin === 1}
+                className="w-4 h-4 accent-primary" />
+              <span className="font-body-md text-body-md">Recevoir la newsletter (nouveautés, promotions exclusives)</span>
+            </label>
+            <label className="flex items-center gap-3 cursor-pointer">
+              <input type="hidden" name="alertes_stock" value="0" />
+              <input type="checkbox" name="alertes_stock" value="1"
+                defaultChecked={(prefs as any)?.alertes_stock !== 0}
+                className="w-4 h-4 accent-primary" />
+              <span className="font-body-md text-body-md">Alertes de retour en stock pour mes favoris</span>
+            </label>
+          </div>
+          <button type="submit" disabled={saving}
+            className="bg-primary text-on-primary font-label-md text-label-md uppercase tracking-wider px-8 py-3 hover:bg-on-primary-container transition-colors duration-200 disabled:opacity-60">
+            {saving ? "Enregistrement…" : "Enregistrer mes préférences"}
           </button>
         </Form>
       </div>

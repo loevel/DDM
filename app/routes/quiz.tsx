@@ -4,6 +4,8 @@ import { Link, useFetcher } from "@remix-run/react";
 import { useState } from "react";
 import { getDB } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
+import { getCustomerId } from "~/lib/session.server";
+import { cfImage } from "~/lib/images";
 
 export const meta: MetaFunction = () => [
   { title: "Trouve ta perruque idéale — DDM Wigs & More" },
@@ -20,6 +22,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const facilite   = form.get("facilite") as string;
 
   const db = getDB(context as any);
+
+  // Sauvegarder le résultat si la cliente est connectée
+  try {
+    const customerId = await getCustomerId(request, context as any);
+    if (customerId) {
+      const answers = { experience, texture, budget, facilite,
+        occasion: form.get("occasion") as string };
+      await (context as any).cloudflare.env.DB
+        .prepare("UPDATE customers SET quiz_result = ?, quiz_completed_at = datetime('now'), texture_preferee = ?, budget_habituel = ? WHERE id = ?")
+        .bind(JSON.stringify(answers), texture || null, budget || null, customerId)
+        .run();
+    }
+  } catch { /* silencieux si non connectée */ }
 
   let where: string[] = ["p.stock > 0"];
   const binds: any[] = [];
@@ -220,7 +235,7 @@ export default function Quiz() {
                   <Link key={p.id} to={`/boutique/${p.slug}`} className="group block">
                     <div className="aspect-[4/5] overflow-hidden bg-surface-container mb-3 relative">
                       {p.image_key ? (
-                        <img alt={p.name} src={p.image_key}
+                        <img alt={p.name} src={cfImage(p.image_key, "card") ?? p.image_key}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">

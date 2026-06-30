@@ -1,5 +1,0 @@
-# Cloudflare Pages gère /boutique → boutique.html automatiquement (Pretty URLs)
-# Ces règles couvrent uniquement les alias alternatifs
-
-/histoire        /notre-histoire  308
-/guide           /guide-entretien 308

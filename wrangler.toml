@@ -22,3 +22,10 @@ send_email = [
 
 [vars]
 ENVIRONMENT = "production"
+CF_ACCOUNT_ID = ""     # à remplir — visible dans le tableau de bord Cloudflare (URL: dash.cloudflare.com → Images)
+CF_ACCOUNT_HASH = ""   # à remplir — visible dans Images → "Account Hash"
+STRIPE_PUBLISHABLE_KEY = ""  # à remplir — Stripe Dashboard → Developers → API keys → Publishable key (pk_live_...)
+# Secrets (à ajouter dans Cloudflare Pages → Settings → Environment variables) :
+# CF_IMAGES_TOKEN    — token Cloudflare Images
+# STRIPE_SECRET_KEY  — Stripe → Developers → API keys → Secret key (sk_live_...)
+# STRIPE_WEBHOOK_SECRET — Stripe → Developers → Webhooks → Signing secret (whsec_...)

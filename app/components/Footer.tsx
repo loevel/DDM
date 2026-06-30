@@ -44,10 +44,29 @@ export function Footer() {
         </div>
       </div>
 
-      <div className="max-w-[90rem] mx-auto px-10 lg:px-20 py-6 border-t border-[#d4c4b7]/30 flex flex-col md:flex-row justify-between items-center gap-4">
-        <p className="text-on-surface-variant font-sans text-sm">© 2024 DDM Wigs &amp; More. Tous les prix sont en CAD.</p>
-        <div className="flex gap-6 text-on-surface-variant font-sans text-sm">
-          <span>Visa</span><span>Mastercard</span><span>Amex</span><span>Interac</span>
+      <div className="max-w-[90rem] mx-auto px-10 lg:px-20 py-5 border-t border-[#d4c4b7]/30">
+        <div className="flex flex-wrap justify-center gap-2 mb-4">
+          {[
+            { label: "VISA", bg: "#1a1f71", color: "#fff", wide: true },
+            { label: "MC", bg: "#eb001b", color: "#fff", accent: "#f79e1b" },
+            { label: "AMEX", bg: "#007bc1", color: "#fff" },
+            { label: "Interac", bg: "#ffd100", color: "#000" },
+            { label: "PayPal", bg: "#003087", color: "#fff" },
+            { label: "Apple Pay", bg: "#000", color: "#fff" },
+            { label: "Google Pay", bg: "#fff", color: "#3c4043", border: true },
+          ].map(({ label, bg, color, border }) => (
+            <span
+              key={label}
+              className={`inline-flex items-center justify-center px-3 h-7 rounded text-[11px] font-bold tracking-tight select-none ${border ? "border border-[#dadce0]" : ""}`}
+              style={{ backgroundColor: bg, color }}
+            >
+              {label}
+            </span>
+          ))}
+        </div>
+        <div className="flex flex-col md:flex-row justify-between items-center gap-2">
+          <p className="text-on-surface-variant font-sans text-sm">© 2024 DDM Wigs &amp; More. Tous les prix sont en CAD.</p>
+          <p className="font-sans text-xs text-on-surface-variant/60">Paiements sécurisés · Cryptage SSL</p>
         </div>
       </div>
     </footer>

@@ -4,6 +4,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { getDB, getProducts } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
+import { cfImage } from "~/lib/images";
 
 export const meta: MetaFunction = () => [
   { title: "Promotions — DDM Wigs & More" },
@@ -231,7 +232,7 @@ export default function Promotions() {
                   {/* Image */}
                   <div className="aspect-[3/4] bg-surface-container overflow-hidden relative mb-4">
                     {p.image_key ? (
-                      <img src={p.image_key} alt={p.name}
+                      <img src={cfImage(p.image_key, "card") ?? p.image_key} alt={p.name}
                         className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                     ) : (
                       <div className="w-full h-full bg-surface-container-high flex items-center justify-center">

@@ -2,6 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
 import { Link, useLoaderData } from "@remix-run/react";
 import { getDB } from "~/lib/db.server";
+import { cfImage } from "~/lib/images";
 
 export const meta: MetaFunction = () => [
   { title: "Collections — DDM Wigs & More" },
@@ -66,7 +67,7 @@ export default function CollectionsIndex() {
               >
                 {col.image_key ? (
                   <img
-                    src={`https://imagedelivery.net/placeholder/${col.image_key}/public`}
+                    src={cfImage(col.image_key, "card") ?? col.image_key ?? ""}
                     alt={col.name}
                     className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:opacity-50 group-hover:scale-105 transition-all duration-500"
                   />

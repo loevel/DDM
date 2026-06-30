@@ -1,0 +1,1 @@
+ALTER TABLE announcements ADD COLUMN height_px INTEGER NOT NULL DEFAULT 40;

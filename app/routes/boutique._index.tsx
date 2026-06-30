@@ -4,11 +4,29 @@ import { Form, Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { getDB, getProducts } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
+import { cfImage } from "~/lib/images";
+import { DEMO_PRODUCTS } from "~/lib/demo-products";
 
-export const meta: MetaFunction = () => [
-  { title: "Boutique — DDM Wigs & More" },
-  { name: "description", content: "Perruques en cheveux humains 100 % — lace front, HD lace, glueless, body wave, bouclé. Livraison rapide Montréal." },
-];
+const BASE = "https://ddm-wigs.pages.dev";
+
+export const meta: MetaFunction = () => {
+  const title = "Boutique — DDM Wigs & More";
+  const description = "Perruques en cheveux humains 100 % — lace front, HD lace, glueless, body wave, bouclé. Livraison rapide Montréal & Canada.";
+  return [
+    { title },
+    { name: "description", content: description },
+    { tagName: "link", rel: "canonical", href: `${BASE}/boutique` },
+    { property: "og:type",        content: "website" },
+    { property: "og:title",       content: title },
+    { property: "og:description", content: description },
+    { property: "og:url",         content: `${BASE}/boutique` },
+    { property: "og:site_name",   content: "DDM Wigs & More" },
+    { property: "og:locale",      content: "fr_CA" },
+    { name: "twitter:card",       content: "summary" },
+    { name: "twitter:title",      content: title },
+    { name: "twitter:description",content: description },
+  ];
+};
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -47,15 +65,8 @@ const LACE_LABELS: Record<string, string> = {
   "pre-everything": "Prêt à porter", "v-part": "V-Part", "u-part": "U-Part",
 };
 
-// Static demo products shown when DB is empty
-const STATIC: Product[] = [
-  { id: 1, slug: "honey-glaze", name: "Honey Glaze Wave", description: "Body Wave en cheveux humains 100% avec lace HD transparente. Rendu naturel exceptionnel.", price_cad: 485, compare_at_price_cad: null, texture: "body-wave", type_lace: "13x4", longueur_po: 22, hd_lace: 1, glueless: 0, pret_a_porter: 0, densite: 150, featured: 1, stock: 5, image_key: "https://lh3.googleusercontent.com/aida/AP1WRLtATYIhbRck9KGU2ThKBEoqFDUrm0LsQ71wU6frWr5xOoJuCP9RYN3ZNuJXQvnMuDVOIMKX_wPlr3JdHrMuiUz364_oyERzvHH2_4Gy43uVrHIQhoUq_TDDt1nz-HORUexrsLrzxc7knNIgtfxcD2oFeaTfkUBW-YGcRFtbWDYZgf28nMrVisLj9h8ln1sYmeSEnVpoblbhYRZfUiw5eQ_HkpWErPF_J2vEDqPZF54_RRWFYQ4dmbz8kw", couleur: "naturel", famille: "perruque", category: "perruque", quantite_meches: null, created_at: "" },
-  { id: 2, slug: "midnight-curl", name: "Midnight Deep Curl", description: "Deep Wave intense en noir naturel. Parfaite pour un look glamour et audacieux.", price_cad: 510, compare_at_price_cad: 620, texture: "deep-wave", type_lace: "13x4", longueur_po: 24, hd_lace: 0, glueless: 0, pret_a_porter: 0, densite: 150, featured: 0, stock: 3, image_key: "https://lh3.googleusercontent.com/aida/AP1WRLvVcucHmrJHOvNwwz4gKr9Fmqsv6BuvS_dsVPPq3c1WYLx-Iq1r8SvOXSP9BtLdVyJHxMgo85XnvI4n86XAajwiB0pv8bnK3ICHejYoHo1wUSSUqaGXeYk4cRX96XCm-oQ7CEZQy13Dxl-d_JSnCABTG1XGwDYrYPxJAlgrT5BDGBRP8lUD2wkSxbkIxyTs02DkP5gMwXTSg5bitqlkZ5bZ4jb61R4e8taUSVML3Kl4uBtLvxKDWmHm7P0", couleur: "naturel", famille: "perruque", category: "perruque", quantite_meches: null, created_at: "" },
-  { id: 3, slug: "silk-body", name: "Silk Body Wave", description: "Body Wave soyeux avec closure 5×5 HD. Sans colle pour un port confortable au quotidien.", price_cad: 620, compare_at_price_cad: null, texture: "body-wave", type_lace: "5x5", longueur_po: 26, hd_lace: 1, glueless: 1, pret_a_porter: 0, densite: 180, featured: 0, stock: 4, image_key: "https://lh3.googleusercontent.com/aida/AP1WRLs_aaSnXE89RHNSUZEZuCXRK3EyOM8kuJUYogmyeCs5V6fNC1kpVMFwyZ1qUk2woaXd9SOPqETXXvr-zQX_xONFesi_48Wc55zBf_KDar2RY9uo0g3tD-Lb7nqscydgJD6H6XfWBsfbE6Mkvsy0eU6T2N1b4_N7ICoWGEDJ5UzKUsBdcRmgZxjcgxoYWfZ8r7LA4z_zxfm3thiga1P4ZjWin2hj2TWrQ0vGV4pLHzQwx6EhaiEmypx0VtE", couleur: "naturel", famille: "perruque", category: "perruque", quantite_meches: null, created_at: "" },
-  { id: 4, slug: "polished-straight", name: "Polished Straight", description: "Lisse parfaite prête à porter en moins de 5 minutes. Finition brillante et naturelle.", price_cad: 395, compare_at_price_cad: null, texture: "lisse", type_lace: "glueless", longueur_po: 20, hd_lace: 0, glueless: 1, pret_a_porter: 1, densite: 130, featured: 0, stock: 7, image_key: "https://lh3.googleusercontent.com/aida/AP1WRLvBC9t1s695CClir9TlxL0XPPKNaQmzbbn6JTL-kEq_mxKL3WEhzDnLa26givoutSM-wl7pgdn3ZzIi4fuRILNlHUxlmIuTpu-WcVktd7HcQr_mgQH4wM33keoQiY4WK19ap-8-esMLtR9kyNIYDZQormb2F2x1EnqVf06Ik0cDH-6-VW_T39Ibbm1_11DdoykandEDEOVk9Xwv96lCA2wcyKwJY0rIafmIOG9ZQe4EXxEnXUfrYM5Omko", couleur: "naturel", famille: "perruque", category: "perruque", quantite_meches: null, created_at: "" },
-  { id: 5, slug: "obsidian-curls", name: "Obsidian Curls", description: "Kinky Curly volumineux pour un style afro chic et naturel. Cheveux humains non traités.", price_cad: 440, compare_at_price_cad: null, texture: "kinky-curly", type_lace: "13x4", longueur_po: 18, hd_lace: 0, glueless: 0, pret_a_porter: 0, densite: 150, featured: 0, stock: 2, image_key: "https://lh3.googleusercontent.com/aida/AP1WRLs3oe28jC8kMS-YTVNfj58ZDiv0TCZuor94dCEnJI7fvkdZ3CDmQB1aXjtNDjWH1CnwxDzCC_6Gojto8J62EbQYf1YwwEIoBsDd8mGx-_5NjdONLffhdhrNFKFUj2eAgCMx5NID_6SypvMVJ-b519ieQR8kWeL5WX4R0x4tgeDPBFtL8Q06er8q2espiKzLlgdllR-31OBs3pLQ4GD4TBXhRk90N6ZFvjeBR3W7CNtuOxdwE7tc4mF1_vc", couleur: "naturel", famille: "perruque", category: "perruque", quantite_meches: null, created_at: "" },
-  { id: 6, slug: "caramel-swirl", name: "Caramel Swirl", description: "Body Wave ombré caramel avec lace HD. La touche de couleur parfaite pour l'été.", price_cad: 565, compare_at_price_cad: null, texture: "body-wave", type_lace: "13x4", longueur_po: 22, hd_lace: 1, glueless: 0, pret_a_porter: 0, densite: 150, featured: 0, stock: 3, image_key: "https://lh3.googleusercontent.com/aida/AP1WRLt2xTYE9pmbBIvkUMiiUWIs79t8yMhbSgAaHoWUgo6Q3Ax4CrsawVIURgDu1CqcWoeq8gFvJjj-TaJLwfLGj4zBe6xUEshFRpgzMZZ4j1Nv-Y4dk9o_vvoYRfsmlLnjvIeXDpvDcrlUQUbpV_zaz77FffnV-LU6H8nGtjL5VKKTmjairXwA4KauuM9OYz19eI5IB6kr6oncvpmT741osc6CpoMddPSKEpNqcs6QZNnb4mXAK8qgHIRwGMc", couleur: "ombre", famille: "perruque", category: "perruque", quantite_meches: null, created_at: "" },
-];
+// Static demo products shown when DB is empty (imported from shared lib)
+const STATIC = DEMO_PRODUCTS;
 
 type RatingMap = Record<number, { avg: number; count: number }>;
 
@@ -69,6 +80,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   let ratingMap: RatingMap = {};
   let collections: { id: number; name: string; slug: string }[] = [];
   let flashMap: Record<number, { price: number; ends_at: string }> = {};
+  let filterCounts: {
+    famille: Record<string, number>;
+    texture: Record<string, number>;
+    lace: Record<string, number>;
+  } = { famille: {}, texture: {}, lace: {} };
 
   try {
     const db = getDB(context as any);
@@ -108,6 +124,25 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     }
 
     try {
+      const { results: familleCounts } = await db.prepare(
+        "SELECT famille, COUNT(*) as cnt FROM products WHERE stock > 0 AND famille IS NOT NULL GROUP BY famille"
+      ).all<{ famille: string; cnt: number }>();
+      (familleCounts ?? []).forEach(r => { filterCounts.famille[r.famille] = r.cnt; });
+
+      const { results: textureCounts } = await db.prepare(
+        "SELECT texture, COUNT(*) as cnt FROM products WHERE stock > 0 AND texture IS NOT NULL GROUP BY texture"
+      ).all<{ texture: string; cnt: number }>();
+      (textureCounts ?? []).forEach(r => { filterCounts.texture[r.texture] = r.cnt; });
+
+      const { results: laceCounts } = await db.prepare(
+        "SELECT type_lace, COUNT(*) as cnt FROM products WHERE stock > 0 AND type_lace IS NOT NULL GROUP BY type_lace"
+      ).all<{ type_lace: string; cnt: number }>();
+      (laceCounts ?? []).forEach(r => { filterCounts.lace[r.type_lace] = r.cnt; });
+    } catch {
+      // table pas encore prête
+    }
+
+    try {
       const now = new Date().toISOString();
       const { results: flashes } = await db.prepare(
         "SELECT product_id, flash_price_cad, ends_at FROM flash_sales WHERE active = 1 AND starts_at <= ? AND ends_at > ? ORDER BY flash_price_cad ASC"
@@ -127,6 +162,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     ratingMap,
     collections,
     flashMap,
+    filterCounts,
     filters: {
       famille: p("famille"), texture: p("texture"), lace: p("lace"),
       couleur: p("couleur"), lmin: p("lmin"), lmax: p("lmax"),
@@ -138,7 +174,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function Boutique() {
-  const { products: dbProducts, ratingMap, filters, collections, flashMap } = useLoaderData<typeof loader>();
+  const { products: dbProducts, ratingMap, filters, collections, flashMap, filterCounts } = useLoaderData<typeof loader>();
   const products = dbProducts.length > 0 ? dbProducts : STATIC;
   const activeCount = Object.values(filters).filter(v => v !== "" && v !== "popularite").length;
   const [modalProduct, setModalProduct] = useState<Product | null>(null);
@@ -194,16 +230,16 @@ export default function Boutique() {
 
               <FSection title="Type de produit">
                 {([["", "Tous"], ["perruque", "Perruques"], ["meche", "Mèches"], ["closure", "Closures"], ["frontal", "Frontals"]] as [string, string][]).map(([v, l]) => (
-                  <FRadio key={v} name="famille" value={v} label={l} current={filters.famille} />
+                  <FRadio key={v} name="famille" value={v} label={l} current={filters.famille} count={v ? filterCounts.famille[v] : undefined} />
                 ))}
               </FSection>
 
               <FSection title="Texture">
-                {TEXTURES.map(([v, l]) => <FCheck key={v} name="texture" value={v} label={l} current={filters.texture} />)}
+                {TEXTURES.map(([v, l]) => <FCheck key={v} name="texture" value={v} label={l} current={filters.texture} count={filterCounts.texture[v]} />)}
               </FSection>
 
               <FSection title="Type de lace">
-                {LACES.map(([v, l]) => <FCheck key={v} name="lace" value={v} label={l} current={filters.lace} />)}
+                {LACES.map(([v, l]) => <FCheck key={v} name="lace" value={v} label={l} current={filters.lace} count={filterCounts.lace[v]} />)}
               </FSection>
 
               <FSection title="Longueur">
@@ -302,7 +338,7 @@ export default function Boutique() {
             )}
 
             {products.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-x-6 gap-y-12">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-12">
                 {products.map((p, i) => (
                   <ProductCard
                     key={p.id || i}
@@ -436,7 +472,7 @@ function QuickViewModal({ product: p, onClose }: { product: Product; onClose: ()
           {/* ── Image ── */}
           <div className="aspect-[3/4] md:aspect-auto bg-surface-container relative md:min-h-[500px]">
             {p.image_key ? (
-              <img src={p.image_key} alt={p.name} className="w-full h-full object-cover" />
+              <img src={cfImage(p.image_key, "card") ?? p.image_key} alt={p.name} className="w-full h-full object-cover" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <span className="material-symbols-outlined text-6xl text-outline-variant">styler</span>
@@ -640,8 +676,9 @@ function QuickViewModal({ product: p, onClose }: { product: Product; onClose: ()
 // ─── Product Card ───────────────────────────────────────────────────────────
 
 function FlashCountdown({ endsAt }: { endsAt: string }) {
-  const [left, setLeft] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()));
+  const [left, setLeft] = useState(0); // 0 on SSR, real value set by useEffect on client
   useEffect(() => {
+    setLeft(Math.max(0, new Date(endsAt).getTime() - Date.now()));
     const id = setInterval(() => {
       const ms = Math.max(0, new Date(endsAt).getTime() - Date.now());
       setLeft(ms);
@@ -684,7 +721,7 @@ function ProductCard({
       {/* Image */}
       <div className="aspect-[4/5] overflow-hidden bg-surface-container relative mb-4">
         {p.image_key ? (
-          <img alt={p.name} src={p.image_key}
+          <img alt={p.name} src={cfImage(p.image_key, "card") ?? p.image_key}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
         ) : (
           <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
@@ -815,24 +852,26 @@ function FSection({ title, children }: { title: string; children: React.ReactNod
   );
 }
 
-function FRadio({ name, value, label, current }: { name: string; value: string; label: string; current: string }) {
+function FRadio({ name, value, label, current, count }: { name: string; value: string; label: string; current: string; count?: number }) {
   return (
     <label className="flex items-center gap-2.5 cursor-pointer group py-0.5">
       <input type="radio" name={name} value={value} defaultChecked={current === value}
         className="accent-primary w-4 h-4"
         onChange={e => (e.target.form as HTMLFormElement).requestSubmit()} />
-      <span className={`font-sans text-sm ${current === value ? "text-primary font-semibold" : "text-on-surface-variant group-hover:text-on-surface"}`}>{label}</span>
+      <span className={`font-sans text-sm flex-1 ${current === value ? "text-primary font-semibold" : "text-on-surface-variant group-hover:text-on-surface"}`}>{label}</span>
+      {count !== undefined && <span className="font-sans text-[11px] text-on-surface-variant/60">{count}</span>}
     </label>
   );
 }
 
-function FCheck({ name, value, label, current }: { name: string; value: string; label: string; current: string }) {
+function FCheck({ name, value, label, current, count }: { name: string; value: string; label: string; current: string; count?: number }) {
   return (
     <label className="flex items-center gap-2.5 cursor-pointer group py-0.5">
       <input type="checkbox" name={name} value={value} defaultChecked={current === value}
         className="accent-primary w-4 h-4"
         onChange={e => (e.target.form as HTMLFormElement).requestSubmit()} />
-      <span className={`font-sans text-sm ${current === value ? "text-primary font-semibold" : "text-on-surface-variant group-hover:text-on-surface"}`}>{label}</span>
+      <span className={`font-sans text-sm flex-1 ${current === value ? "text-primary font-semibold" : "text-on-surface-variant group-hover:text-on-surface"}`}>{label}</span>
+      {count !== undefined && <span className="font-sans text-[11px] text-on-surface-variant/60">{count}</span>}
     </label>
   );
 }

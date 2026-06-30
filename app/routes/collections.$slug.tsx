@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
 import { Link, useLoaderData } from "@remix-run/react";
 import { getDB } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
+import { cfImage } from "~/lib/images";
 
 export async function loader({ params, context }: LoaderFunctionArgs) {
   const db = getDB(context as any);
@@ -21,13 +22,44 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     ORDER BY p.featured DESC, p.created_at DESC
   `).bind(collection.id).all<Product>();
 
-  return json({ collection, products: products ?? [] });
+  const ids = (products ?? []).map(p => p.id);
+  let ratingMap: Record<number, { avg: number; count: number }> = {};
+  if (ids.length > 0) {
+    try {
+      const placeholders = ids.map(() => "?").join(",");
+      const { results: rows } = await db.prepare(
+        `SELECT product_id, COUNT(*) as cnt, AVG(rating) as avg FROM reviews WHERE product_id IN (${placeholders}) AND approved = 1 GROUP BY product_id`
+      ).bind(...ids).all<{ product_id: number; cnt: number; avg: number }>();
+      (rows ?? []).forEach(r => { ratingMap[r.product_id] = { avg: r.avg, count: r.cnt }; });
+    } catch { /* reviews table not ready */ }
+  }
+
+  return json({ collection, products: products ?? [], ratingMap });
 }
 
-export const meta: MetaFunction<typeof loader> = ({ data }) => [
-  { title: `${data?.collection.name ?? "Collection"} — DDM Wigs & More` },
-  { name: "description", content: data?.collection.description ?? `Découvrez la collection ${data?.collection.name}` },
-];
+const BASE = "https://ddm-wigs.pages.dev";
+
+export const meta: MetaFunction<typeof loader> = ({ data }) => {
+  const name = data?.collection.name ?? "Collection";
+  const slug = data?.collection.slug ?? "";
+  const title = `${name} — DDM Wigs & More`;
+  const description = data?.collection.description ?? `Découvrez la collection ${name} — perruques cheveux humains premium.`;
+  const url = `https://ddm-wigs.pages.dev/collections/${slug}`;
+  return [
+    { title },
+    { name: "description", content: description },
+    { tagName: "link", rel: "canonical", href: url },
+    { property: "og:type",        content: "website" },
+    { property: "og:title",       content: title },
+    { property: "og:description", content: description },
+    { property: "og:url",         content: url },
+    { property: "og:site_name",   content: "DDM Wigs & More" },
+    { property: "og:locale",      content: "fr_CA" },
+    { name: "twitter:card",       content: "summary" },
+    { name: "twitter:title",      content: title },
+    { name: "twitter:description",content: description },
+  ];
+};
 
 function Stars({ rating }: { rating: number }) {
   return (
@@ -40,7 +72,7 @@ function Stars({ rating }: { rating: number }) {
   );
 }
 
-function ProductCard({ product }: { product: Product }) {
+function ProductCard({ product, rating }: { product: Product; rating?: { avg: number; count: number } }) {
   const price = typeof product.price_cad === "number" ? product.price_cad : Number(product.price_cad);
   const compareAt = product.compare_at_price_cad ? Number(product.compare_at_price_cad) : null;
   const hasDiscount = compareAt && compareAt > price;
@@ -51,7 +83,7 @@ function ProductCard({ product }: { product: Product }) {
       <div className="relative aspect-[3/4] bg-surface-container overflow-hidden mb-3">
         {product.image_key ? (
           <img
-            src={`https://imagedelivery.net/placeholder/${product.image_key}/public`}
+            src={cfImage(product.image_key, "card") ?? product.image_key ?? ""}
             alt={product.name}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
@@ -74,6 +106,12 @@ function ProductCard({ product }: { product: Product }) {
       <h3 className="font-sans text-sm font-semibold text-on-surface group-hover:text-primary transition-colors leading-snug mb-1">
         {product.name}
       </h3>
+      {rating ? (
+        <div className="flex items-center gap-1.5 mb-1">
+          <Stars rating={rating.avg} />
+          <span className="font-sans text-[11px] text-on-surface-variant">({rating.count})</span>
+        </div>
+      ) : null}
       <div className="flex items-baseline gap-2">
         <span className="font-sans text-sm font-bold text-on-surface">{price.toFixed(2)} $</span>
         {hasDiscount && (
@@ -85,7 +123,7 @@ function ProductCard({ product }: { product: Product }) {
 }
 
 export default function CollectionPage() {
-  const { collection, products } = useLoaderData<typeof loader>();
+  const { collection, products, ratingMap } = useLoaderData<typeof loader>();
 
   return (
     <div className="min-h-screen bg-background">
@@ -93,7 +131,7 @@ export default function CollectionPage() {
       <div className="relative bg-on-surface text-surface overflow-hidden">
         {collection.image_key && (
           <img
-            src={`https://imagedelivery.net/placeholder/${collection.image_key}/public`}
+            src={cfImage(collection.image_key, "card") ?? collection.image_key ?? ""}
             alt={collection.name}
             className="absolute inset-0 w-full h-full object-cover opacity-40"
           />
@@ -122,7 +160,7 @@ export default function CollectionPage() {
         {products.length > 0 ? (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6 gap-y-12">
             {products.map(p => (
-              <ProductCard key={p.id} product={p} />
+              <ProductCard key={p.id} product={p} rating={ratingMap[p.id]} />
             ))}
           </div>
         ) : (

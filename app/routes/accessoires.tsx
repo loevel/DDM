@@ -3,6 +3,7 @@ import { json } from "@remix-run/cloudflare";
 import { useLoaderData, Link } from "@remix-run/react";
 import { getDB, getProducts } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
+import { cfImage } from "~/lib/images";
 
 export const meta: MetaFunction = () => [
   { title: "Accessoires & Soins - DDM Wigs & More" },
@@ -73,7 +74,7 @@ export default function Accessoires() {
                     <img
                       className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                       alt={product.name}
-                      src={product.image_key}
+                      src={cfImage(product.image_key, "card") ?? product.image_key}
                     />
                   ) : (
                     <div className="w-full h-full bg-surface-container-high" />

@@ -53,6 +53,11 @@ export default function AdminCommandes() {
     <div className="p-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-on-surface">Commandes <span className="text-on-surface-variant font-normal text-lg">({orders.length})</span></h1>
+        <a href={`/api/export-csv?type=commandes${status !== "all" ? `&status=${status}` : ""}${search ? `&q=${encodeURIComponent(search)}` : ""}`}
+          className="flex items-center gap-1.5 text-sm border border-outline-variant px-4 py-2 text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
+          <span className="material-symbols-outlined text-base">download</span>
+          Exporter CSV
+        </a>
       </div>
 
       {/* Filters */}
@@ -93,7 +98,9 @@ export default function AdminCommandes() {
           <tbody className="divide-y divide-outline-variant/10">
             {orders.map((o: any) => (
               <tr key={o.reference} className="hover:bg-surface-container-low transition-colors">
-                <td className="px-4 py-3 font-mono text-xs text-primary">{o.reference}</td>
+                <td className="px-4 py-3 font-mono text-xs">
+                  <Link to={`/admin/commandes/${o.id}`} className="text-primary hover:underline">{o.reference}</Link>
+                </td>
                 <td className="px-4 py-3 text-on-surface">{o.customer_name}</td>
                 <td className="px-4 py-3 text-on-surface-variant text-xs">{o.customer_email}</td>
                 <td className="px-4 py-3 capitalize text-xs">{"Achat"}</td>

@@ -4,6 +4,7 @@ import { Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { getDB } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
+import { cfImage } from "~/lib/images";
 
 export const meta: MetaFunction = () => [
   { title: "Ventes Flash — DDM Wigs & More" },
@@ -35,8 +36,9 @@ export async function loader({ context }: LoaderFunctionArgs) {
 }
 
 function useCountdown(endsAt: string) {
-  const [left, setLeft] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()));
+  const [left, setLeft] = useState(0); // 0 on SSR, real value set by useEffect on client
   useEffect(() => {
+    setLeft(Math.max(0, new Date(endsAt).getTime() - Date.now()));
     const id = setInterval(() => {
       const ms = Math.max(0, new Date(endsAt).getTime() - Date.now());
       setLeft(ms);
@@ -64,7 +66,7 @@ function FlashCard({ product: p }: { product: FlashProduct }) {
     <Link to={`/boutique/${p.slug}`} className="group block">
       <div className="relative aspect-[4/5] overflow-hidden bg-surface-container mb-4">
         {p.image_key ? (
-          <img alt={p.name} src={p.image_key}
+          <img alt={p.name} src={cfImage(p.image_key, "card") ?? p.image_key}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
         ) : (
           <div className="w-full h-full flex items-center justify-center">

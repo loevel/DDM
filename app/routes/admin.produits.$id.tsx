@@ -3,27 +3,31 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { Form, Link, useActionData, useFetcher, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
 import { ProduitFormFields } from "./admin.produits.nouveau";
+import type { MediaItem } from "./admin.produits.nouveau";
 
 export const meta: MetaFunction = () => [{ title: "Modifier produit — Admin DDM" }];
 
 export async function loader({ params, context }: LoaderFunctionArgs) {
   const db = context.cloudflare.env.DB;
-  const product = await db
-    .prepare("SELECT * FROM products WHERE id = ?")
-    .bind(params.id).first();
+
+  const [product, allCollections, productCollections, media] = await Promise.all([
+    db.prepare("SELECT * FROM products WHERE id = ?").bind(params.id).first(),
+    db.prepare("SELECT id, name FROM collections WHERE active = 1 ORDER BY position ASC, id ASC").all(),
+    db.prepare("SELECT collection_id FROM product_collections WHERE product_id = ?").bind(params.id).all(),
+    db.prepare("SELECT type, url, thumbnail_url, alt_text FROM product_media WHERE product_id = ? ORDER BY position ASC")
+      .bind(params.id).all<MediaItem>(),
+  ]);
+
   if (!product) throw new Response("Produit introuvable", { status: 404 });
 
-  const { results: allCollections } = await db
-    .prepare("SELECT id, name FROM collections WHERE active = 1 ORDER BY position ASC, id ASC")
-    .all();
+  const assignedIds = new Set((productCollections.results as any[]).map((r: any) => r.collection_id));
 
-  const { results: productCollections } = await db
-    .prepare("SELECT collection_id FROM product_collections WHERE product_id = ?")
-    .bind(params.id).all();
-
-  const assignedIds = new Set((productCollections as any[]).map((r: any) => r.collection_id));
-
-  return json({ product, allCollections: allCollections ?? [], assignedIds: [...assignedIds] });
+  return json({
+    product,
+    allCollections: allCollections.results ?? [],
+    assignedIds: [...assignedIds],
+    media: media.results ?? [],
+  });
 }
 
 export async function action({ request, params, context }: ActionFunctionArgs) {
@@ -49,6 +53,11 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
     return { error: "Nom, prix et famille sont requis." };
   }
 
+  // Médias : extraire la 1ère image pour image_key (compat rétroactive)
+  let mediaItems: MediaItem[] = [];
+  try { mediaItems = JSON.parse(g("media_json") || "[]"); } catch { mediaItems = []; }
+  const firstImageUrl = mediaItems.find(m => m.type === "image")?.url ?? null;
+
   await db.prepare(`
     UPDATE products SET
       name=?, description=?, price_cad=?, compare_at_price_cad=?,
@@ -56,6 +65,13 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
       type_lace=?, texture=?, longueur_po=?, densite=?, couleur=?,
       hd_lace=?, glueless=?, pret_a_porter=?, quantite_meches=?,
       stock=?, image_key=?, featured=?,
+      prix_achat_usd=?, frais_expedition_usd=?, frais_douane_pct=?,
+      fournisseur=?, ref_fournisseur=?, url_fournisseur=?, contact_fournisseur=?,
+      delai_livraison_jours=?, pays_fabrication=?,
+      date_derniere_commande=?, date_prochain_reapprovisionnement=?,
+      qualite_cheveux=?, origine_cheveux=?, cap_size=?, nb_combs=?,
+      seuil_alerte_stock=?, stock_en_commande=?, sku=?, poids_g=?, localisation_entrepot=?,
+      meta_title=?, meta_description=?, tags=?, notes_internes=?,
       updated_at=datetime('now')
     WHERE id=?
   `).bind(
@@ -64,16 +80,36 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
     g("famille") === "accessoire" || g("famille") === "soin" ? g("famille") : "perruque",
     g("famille"),
     g("type_lace") || null, g("texture") || null,
-    n("longueur_po"), n("densite"),
-    g("couleur") || null,
-    b("hd_lace"), b("glueless"), b("pret_a_porter"),
-    n("quantite_meches"),
-    Number(g("stock") || 0), g("image_key") || null,
-    b("featured"), params.id
+    n("longueur_po"), n("densite"), g("couleur") || null,
+    b("hd_lace"), b("glueless"), b("pret_a_porter"), n("quantite_meches"),
+    Number(g("stock") || 0), firstImageUrl, b("featured"),
+    n("prix_achat_usd"), n("frais_expedition_usd"), n("frais_douane_pct") ?? 0,
+    g("fournisseur") || null, g("ref_fournisseur") || null,
+    g("url_fournisseur") || null, g("contact_fournisseur") || null,
+    n("delai_livraison_jours"), g("pays_fabrication") || "Chine",
+    g("date_derniere_commande") || null, g("date_prochain_reapprovisionnement") || null,
+    g("qualite_cheveux") || null, g("origine_cheveux") || null,
+    g("cap_size") || null, n("nb_combs"),
+    Number(g("seuil_alerte_stock") || 3), Number(g("stock_en_commande") || 0),
+    g("sku") || null, n("poids_g"), g("localisation_entrepot") || null,
+    g("meta_title") || null, g("meta_description") || null,
+    g("tags") || null, g("notes_internes") || null,
+    params.id
   ).run();
+
+  // Remplacer tous les médias du produit
+  await db.prepare("DELETE FROM product_media WHERE product_id = ?").bind(params.id).run();
+  for (let i = 0; i < mediaItems.length; i++) {
+    const m = mediaItems[i];
+    await db.prepare(
+      "INSERT INTO product_media (product_id, type, url, thumbnail_url, alt_text, position) VALUES (?,?,?,?,?,?)"
+    ).bind(params.id, m.type, m.url, m.thumbnail_url || null, m.alt_text || null, i).run();
+  }
 
   throw redirect("/admin/produits");
 }
+
+// ─── Panel Collections ────────────────────────────────────────────────────────
 
 function CollectionsPanel({
   allCollections,
@@ -96,10 +132,16 @@ function CollectionsPanel({
   const saved = fetcher.data?.ok && fetcher.state === "idle";
 
   return (
-    <div className="border border-outline-variant rounded-lg p-5">
-      <h2 className="text-sm font-bold uppercase tracking-wider text-on-surface-variant mb-3">Collections</h2>
+    <div className="bg-surface border border-outline-variant/30 p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <span className="material-symbols-outlined text-base text-primary">collections_bookmark</span>
+        <h2 className="font-semibold text-on-surface">Collections</h2>
+      </div>
       {allCollections.length === 0 ? (
-        <p className="text-sm text-on-surface-variant">Aucune collection active. <a href="/admin/collections" className="underline text-primary">Créer une collection</a></p>
+        <p className="text-sm text-on-surface-variant">
+          Aucune collection active.{" "}
+          <a href="/admin/collections" className="underline text-primary">Créer une collection</a>
+        </p>
       ) : (
         <fetcher.Form method="post" className="space-y-3">
           <input type="hidden" name="intent" value="update_collections" />
@@ -120,10 +162,14 @@ function CollectionsPanel({
           </div>
           <div className="flex items-center gap-3 pt-1">
             <button type="submit" disabled={fetcher.state === "submitting"}
-              className="text-xs bg-primary text-on-primary px-4 py-1.5 rounded font-semibold uppercase tracking-wider hover:opacity-90 disabled:opacity-60">
+              className="text-xs bg-primary text-on-primary px-4 py-1.5 font-semibold uppercase tracking-wider hover:opacity-90 disabled:opacity-60">
               {fetcher.state === "submitting" ? "Enregistrement…" : "Sauvegarder"}
             </button>
-            {saved && <span className="text-xs text-secondary-container font-semibold flex items-center gap-1"><span className="material-symbols-outlined text-sm">check_circle</span> Sauvegardé</span>}
+            {saved && (
+              <span className="text-xs text-secondary font-semibold flex items-center gap-1">
+                <span className="material-symbols-outlined text-sm">check_circle</span> Sauvegardé
+              </span>
+            )}
           </div>
         </fetcher.Form>
       )}
@@ -131,13 +177,18 @@ function CollectionsPanel({
   );
 }
 
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export default function EditProduit() {
-  const { product, allCollections, assignedIds } = useLoaderData<typeof loader>();
+  const { product, allCollections, assignedIds, media } = useLoaderData<typeof loader>();
   const data = useActionData<typeof action>();
   const nav = useNavigation();
 
+  // Injecter les médias existants dans les defaults du formulaire
+  const defaults = { ...(product as any), media };
+
   return (
-    <div className="p-8 max-w-3xl">
+    <div className="p-8 max-w-4xl">
       <div className="flex items-center gap-4 mb-8">
         <Link to="/admin/produits" className="text-on-surface-variant hover:text-primary transition-colors">
           <span className="material-symbols-outlined">arrow_back</span>
@@ -146,12 +197,12 @@ export default function EditProduit() {
       </div>
 
       {data?.error && (
-        <div className="mb-6 p-4 bg-error-container text-on-error-container rounded text-sm">{data.error}</div>
+        <div className="mb-6 p-4 bg-error-container text-on-error-container text-sm">{data.error}</div>
       )}
 
       <Form method="post" className="space-y-6">
         <input type="hidden" name="intent" value="update_product" />
-        <ProduitFormFields defaults={product as any} />
+        <ProduitFormFields defaults={defaults} />
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={nav.state === "submitting"}
             className="bg-primary text-on-primary px-6 py-2.5 text-sm font-semibold uppercase tracking-wider hover:opacity-90 disabled:opacity-60">

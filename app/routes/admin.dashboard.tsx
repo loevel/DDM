@@ -8,7 +8,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
   const db = context.cloudflare.env.DB;
   const today = new Date().toISOString().slice(0, 10);
 
-  const [orderStats, todayOrders, recentOrders, lowStock, topCustomers] = await Promise.all([
+  const [orderStats, todayOrders, recentOrders, lowStock, topCustomers, revenueChart] = await Promise.all([
     db.prepare(`
       SELECT
         COUNT(*) as total,
@@ -30,9 +30,11 @@ export async function loader({ context }: LoaderFunctionArgs) {
 
     db.prepare(`SELECT customer_email, customer_name, COUNT(*) as orders, SUM(total_cad) as spent FROM orders WHERE status != 'cancelled' GROUP BY customer_email ORDER BY spent DESC LIMIT 5`)
       .all<{ customer_email: string; customer_name: string; orders: number; spent: number }>(),
+    db.prepare(`SELECT date(created_at) as day, SUM(CASE WHEN status != 'cancelled' THEN total_cad ELSE 0 END) as revenue, COUNT(*) as orders FROM orders WHERE created_at >= datetime('now', '-30 days') GROUP BY date(created_at) ORDER BY day ASC`)
+      .all<{ day: string; revenue: number; orders: number }>(),
   ]);
 
-  return json({ orderStats, todayOrders, recentOrders: recentOrders.results, lowStock: lowStock.results, topCustomers: topCustomers.results });
+  return json({ orderStats, todayOrders, recentOrders: recentOrders.results, lowStock: lowStock.results, topCustomers: topCustomers.results, revenueChart: revenueChart.results ?? [] });
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -46,8 +48,63 @@ const STATUS_FR: Record<string, string> = {
   pending: "Attente", confirmed: "Confirmée", shipped: "Expédiée", delivered: "Livrée", cancelled: "Annulée",
 };
 
+function RevenueChart({ data }: { data: { day: string; revenue: number; orders: number }[] }) {
+  if (data.length === 0) {
+    return (
+      <div className="flex items-center justify-center h-40 text-on-surface-variant text-sm">
+        <span className="material-symbols-outlined mr-2 opacity-40">bar_chart</span>
+        Aucune donnée sur les 30 derniers jours
+      </div>
+    );
+  }
+
+  // Remplir les 30 derniers jours (y compris les jours sans ventes)
+  const days: { day: string; revenue: number; orders: number }[] = [];
+  for (let i = 29; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    const key = d.toISOString().slice(0, 10);
+    const found = data.find(r => r.day === key);
+    days.push({ day: key, revenue: found?.revenue ?? 0, orders: found?.orders ?? 0 });
+  }
+
+  const maxRevenue = Math.max(...days.map(d => d.revenue), 1);
+  const W = 700, H = 160, PAD_B = 28, PAD_T = 10;
+  const barW = (W / days.length) * 0.6;
+  const gap = W / days.length;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H + PAD_B + PAD_T}`} className="w-full" role="img" aria-label="CA 30 derniers jours">
+      {/* Ligne de base */}
+      <line x1={0} y1={H + PAD_T} x2={W} y2={H + PAD_T} stroke="currentColor" strokeOpacity="0.1" strokeWidth={1} />
+      {/* Barres */}
+      {days.map((d, i) => {
+        const barH = Math.max(2, (d.revenue / maxRevenue) * H);
+        const x = i * gap + gap / 2 - barW / 2;
+        const y = PAD_T + H - barH;
+        const label = d.day.slice(8); // jour du mois
+        const showLabel = i === 0 || i === 14 || i === 29 || Number(label) % 5 === 0;
+        return (
+          <g key={d.day}>
+            <rect x={x} y={y} width={barW} height={barH} fill="var(--color-primary)" opacity={d.revenue > 0 ? 0.8 : 0.15} rx={2}>
+              <title>{d.day} — {d.revenue.toFixed(2)} $ · {d.orders} cmd</title>
+            </rect>
+            {showLabel && (
+              <text x={x + barW / 2} y={H + PAD_T + 16} textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.4}>
+                {label}
+              </text>
+            )}
+          </g>
+        );
+      })}
+      {/* Ligne max */}
+      <text x={4} y={PAD_T + 8} fontSize={9} fill="currentColor" opacity={0.4}>{maxRevenue.toFixed(0)} $</text>
+    </svg>
+  );
+}
+
 export default function AdminDashboard() {
-  const { orderStats, todayOrders, recentOrders, lowStock, topCustomers } = useLoaderData<typeof loader>();
+  const { orderStats, todayOrders, recentOrders, lowStock, topCustomers, revenueChart } = useLoaderData<typeof loader>();
 
   return (
     <div className="p-8">
@@ -70,6 +127,20 @@ export default function AdminDashboard() {
             {kpi.sub && <p className="text-xs text-on-surface-variant mt-1">{kpi.sub}</p>}
           </div>
         ))}
+      </div>
+
+      {/* Graphique CA 30 jours */}
+      <div className="bg-surface border border-outline-variant/30 rounded mb-8">
+        <div className="px-5 py-4 border-b border-outline-variant/20 flex items-center justify-between">
+          <h2 className="font-semibold text-on-surface">Évolution du CA — 30 derniers jours</h2>
+          <a href="/api/export-csv?type=commandes" className="flex items-center gap-1 text-xs text-on-surface-variant hover:text-primary transition-colors">
+            <span className="material-symbols-outlined text-base">download</span>
+            Exporter CSV
+          </a>
+        </div>
+        <div className="px-5 py-4">
+          <RevenueChart data={revenueChart} />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">

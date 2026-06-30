@@ -28,9 +28,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     customerName?: string;
     rating?: number;
     reviewBody?: string;
+    photos?: string[];
   };
 
-  const { productId, customerName, rating, reviewBody } = body;
+  const { productId, customerName, rating, reviewBody, photos } = body;
 
   if (!productId || !customerName?.trim() || !rating || rating < 1 || rating > 5) {
     return json({ error: "Données invalides" }, { status: 400 });
@@ -41,9 +42,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const product = await db.prepare("SELECT id FROM products WHERE id = ?").bind(productId).first();
   if (!product) return json({ error: "Produit introuvable" }, { status: 404 });
 
+  const photosJson = Array.isArray(photos) && photos.length > 0
+    ? JSON.stringify(photos.slice(0, 5).filter((u: string) => typeof u === "string"))
+    : null;
+
   await db
-    .prepare("INSERT INTO reviews (product_id, customer_name, rating, body) VALUES (?, ?, ?, ?)")
-    .bind(productId, customerName.trim().slice(0, 100), rating, (reviewBody ?? "").trim().slice(0, 1000) || null)
+    .prepare("INSERT INTO reviews (product_id, customer_name, rating, body, photos) VALUES (?, ?, ?, ?, ?)")
+    .bind(productId, customerName.trim().slice(0, 100), rating, (reviewBody ?? "").trim().slice(0, 1000) || null, photosJson)
     .run();
 
   return json({ success: true });

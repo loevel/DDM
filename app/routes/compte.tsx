@@ -28,10 +28,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 const NAV_LINKS = [
-  { to: "/compte/tableau-de-bord", label: "Tableau de bord", icon: "space_dashboard" },
-  { to: "/compte/commandes", label: "Commandes", icon: "shopping_bag" },
-
-  { to: "/compte/profil", label: "Mon profil", icon: "person" },
+  { to: "/compte/tableau-de-bord", label: "Tableau de bord",    icon: "space_dashboard" },
+  { to: "/compte/commandes",       label: "Commandes",           icon: "shopping_bag" },
+  { to: "/compte/favoris",         label: "Mes favoris",         icon: "favorite" },
+  { to: "/compte/parrainage",      label: "Parrainage & crédits",icon: "redeem" },
+  { to: "/compte/quiz",            label: "Mon profil perruque", icon: "auto_awesome" },
+  { to: "/compte/profil",          label: "Mes informations",    icon: "person" },
 ];
 
 export default function CompteLayout() {

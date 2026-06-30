@@ -1,4 +1,4 @@
-import { Link, useLocation } from "@remix-run/react";
+import { Form, Link, useLocation, useNavigate } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 
 interface Collection { id: number; name: string; slug: string; }
@@ -100,6 +100,57 @@ function CollectionsDropdown({ pathname }: { pathname: string }) {
   );
 }
 
+function SearchBar() {
+  const [open, setOpen] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+
+  function handleOpen() {
+    setOpen(true);
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const q = inputRef.current?.value.trim();
+    if (q) {
+      navigate(`/recherche?q=${encodeURIComponent(q)}`);
+      setOpen(false);
+      if (inputRef.current) inputRef.current.value = "";
+    }
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Escape") setOpen(false);
+  }
+
+  return (
+    <div className="relative flex items-center">
+      {open ? (
+        <form onSubmit={handleSubmit} className="flex items-center gap-2">
+          <input
+            ref={inputRef}
+            type="text"
+            onKeyDown={handleKeyDown}
+            placeholder="Rechercher…"
+            className="w-48 md:w-64 border-b border-outline bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 py-1 px-0 focus:outline-none focus:border-primary transition-all"
+          />
+          <button type="submit" className="material-symbols-outlined text-on-surface-variant hover:text-primary text-xl">
+            search
+          </button>
+          <button type="button" onClick={() => setOpen(false)} className="material-symbols-outlined text-on-surface-variant hover:text-primary text-xl">
+            close
+          </button>
+        </form>
+      ) : (
+        <button onClick={handleOpen} aria-label="Rechercher" className="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer">
+          search
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function Nav() {
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -133,6 +184,7 @@ export function Nav() {
         </div>
 
         <div className="flex items-center gap-5">
+          <SearchBar />
           <Link to="/compte" aria-label="Mon espace client">
             <span className="material-symbols-outlined text-on-surface-variant hover:text-primary cursor-pointer">person</span>
           </Link>
@@ -149,6 +201,17 @@ export function Nav() {
       {/* Menu mobile */}
       {menuOpen && (
         <div className="md:hidden bg-surface border-t border-outline-variant px-6 py-4 flex flex-col gap-4">
+          {/* Barre de recherche mobile */}
+          <Form action="/recherche" method="get" className="flex items-center gap-2 border-b border-outline pb-4 mb-1">
+            <span className="material-symbols-outlined text-on-surface-variant text-xl">search</span>
+            <input
+              name="q"
+              type="text"
+              placeholder="Rechercher un produit…"
+              className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none"
+              onFocus={() => {}}
+            />
+          </Form>
           {links.map(({ to, label, flash, highlight }) => (
             <Link key={to} to={to}
               className={`font-sans text-sm uppercase tracking-widest ${flash || highlight ? "text-error font-bold" : "text-on-surface-variant"}`}

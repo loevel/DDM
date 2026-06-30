@@ -1,17 +1,27 @@
 import { json } from "@remix-run/cloudflare";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
 import { Link, useLoaderData } from "@remix-run/react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getDB, getProducts } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
+import { cfImage } from "~/lib/images";
+import { DEMO_MAP } from "~/lib/demo-products";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
+
+interface ProductMedia {
+  type: "image" | "video";
+  url: string;
+  thumbnail_url: string | null;
+  alt_text: string | null;
+}
 
 interface Review {
   id: number;
   customer_name: string;
   rating: number;
   body: string | null;
+  photos: string | null; // JSON array of CF Images URLs
   created_at: string;
 }
 
@@ -19,6 +29,14 @@ interface ReviewStats {
   count: number;
   avg: number;
   dist: number[]; // index 0 = 1★ … index 4 = 5★
+}
+
+interface QAItem {
+  id: number;
+  customer_name: string;
+  question: string;
+  answer: string;
+  answered_at: string;
 }
 
 interface LongueurVariant { slug: string; longueur_po: number; }
@@ -33,7 +51,22 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     .bind(params.slug)
     .first<Product>();
 
-  if (!product) throw new Response("Produit introuvable", { status: 404 });
+  // Fallback: demo product when DB is empty
+  const demoProduct = !product ? DEMO_MAP[params.slug ?? ""] ?? null : null;
+  if (!product && !demoProduct) throw new Response("Produit introuvable", { status: 404 });
+  if (!product && demoProduct) {
+    return json({
+      product: demoProduct,
+      media: demoProduct.image_key ? [{ type: "image" as const, url: demoProduct.image_key, thumbnail_url: null, alt_text: null }] : [],
+      related: [],
+      longueurVars: [],
+      couleurVars: [],
+      reviews: [],
+      reviewStats: { count: 0, avg: 0, dist: [0, 0, 0, 0, 0] },
+      flash: null,
+      qa: [],
+    });
+  }
 
   // Variantes de longueur : même famille + texture, tous stocks
   const longueurVars = product.famille && product.texture
@@ -54,7 +87,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
   let reviewStats: ReviewStats = { count: 0, avg: 0, dist: [0, 0, 0, 0, 0] };
   try {
     const rows = (await db.prepare(
-      "SELECT id, customer_name, rating, body, created_at FROM reviews WHERE product_id = ? AND approved = 1 ORDER BY created_at DESC LIMIT 20"
+      "SELECT id, customer_name, rating, body, photos, created_at FROM reviews WHERE product_id = ? AND approved = 1 ORDER BY created_at DESC LIMIT 20"
     ).bind(product.id).all<Review>()).results ?? [];
     reviews = rows;
     if (rows.length > 0) {
@@ -67,9 +100,32 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     // table reviews pas encore créée
   }
 
+  // Médias du produit (images + vidéos)
+  let media: ProductMedia[] = [];
+  try {
+    const rows = await db.prepare(
+      "SELECT type, url, thumbnail_url, alt_text FROM product_media WHERE product_id = ? ORDER BY position ASC"
+    ).bind(product.id).all<ProductMedia>();
+    media = rows.results ?? [];
+  } catch { /* table pas encore créée → fallback sur image_key */ }
+
+  // Fallback : si pas de médias, on reconstruit depuis image_key
+  if (media.length === 0 && product.image_key) {
+    media = [{ type: "image", url: product.image_key, thumbnail_url: null, alt_text: null }];
+  }
+
   // Produits similaires (même famille, exclu l'actuel, max 4)
   const similaires = await getProducts(db, { famille: product.famille ?? undefined });
   const related = similaires.filter(p => p.id !== product.id).slice(0, 4);
+
+  // Q&A du produit (questions avec réponse publiée)
+  let qa: QAItem[] = [];
+  try {
+    const rows = await db.prepare(
+      "SELECT id, customer_name, question, answer, answered_at FROM product_questions WHERE product_id = ? AND answered_at IS NOT NULL ORDER BY answered_at DESC LIMIT 20"
+    ).bind(product.id).all<QAItem>();
+    qa = rows.results ?? [];
+  } catch { /* table pas encore créée */ }
 
   // Vente flash active sur ce produit
   let flash: { price: number; ends_at: string } | null = null;
@@ -81,15 +137,41 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     if (row) flash = { price: row.flash_price_cad, ends_at: row.ends_at };
   } catch { /* table pas encore créée */ }
 
-  return json({ product, related, longueurVars, couleurVars, reviews, reviewStats, flash });
+  return json({ product, media, related, longueurVars, couleurVars, reviews, reviewStats, flash, qa });
 }
+
+const BASE = "https://ddm-wigs.pages.dev";
 
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   if (!data) return [{ title: "Produit — DDM Wigs" }];
   const p = data.product;
+  const url = `${BASE}/boutique/${p.slug}`;
+  const description = p.description
+    ?? `${p.name} — Perruque cheveux humains premium. ${p.texture ?? ""} ${p.longueur_po ? p.longueur_po + " po" : ""}. Prix: ${p.price_cad.toFixed(2)} $ CAD.`;
+  const imageUrl = p.image_key ?? undefined;
+
   return [
     { title: `${p.name} — DDM Wigs & More` },
-    { name: "description", content: p.description ?? `${p.name} — Perruque cheveux humains premium. ${p.texture ?? ""} ${p.longueur_po ? p.longueur_po + " po" : ""}. Prix: ${p.price_cad.toFixed(2)} $ CAD.` },
+    { name: "description", content: description },
+    // Canonical
+    { tagName: "link", rel: "canonical", href: url },
+    // Open Graph
+    { property: "og:type",        content: "product" },
+    { property: "og:title",       content: `${p.name} — DDM Wigs & More` },
+    { property: "og:description", content: description },
+    { property: "og:url",         content: url },
+    { property: "og:site_name",   content: "DDM Wigs & More" },
+    { property: "og:locale",      content: "fr_CA" },
+    ...(imageUrl ? [{ property: "og:image", content: imageUrl }] : []),
+    // Twitter Card
+    { name: "twitter:card",        content: "summary_large_image" },
+    { name: "twitter:title",       content: `${p.name} — DDM Wigs & More` },
+    { name: "twitter:description", content: description },
+    ...(imageUrl ? [{ name: "twitter:image", content: imageUrl }] : []),
+    // Prix produit (Facebook)
+    { property: "product:price:amount",   content: String(p.price_cad) },
+    { property: "product:price:currency", content: "CAD" },
+    { property: "product:availability",   content: (p.stock ?? 0) > 0 ? "in stock" : "out of stock" },
   ];
 };
 
@@ -118,8 +200,9 @@ const FAMILLE_LABELS: Record<string, string> = {
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 function FlashCountdown({ endsAt }: { endsAt: string }) {
-  const [left, setLeft] = useState(() => Math.max(0, new Date(endsAt).getTime() - Date.now()));
+  const [left, setLeft] = useState(0); // 0 on SSR, real value set by useEffect on client
   useEffect(() => {
+    setLeft(Math.max(0, new Date(endsAt).getTime() - Date.now()));
     const id = setInterval(() => {
       const ms = Math.max(0, new Date(endsAt).getTime() - Date.now());
       setLeft(ms);
@@ -137,14 +220,18 @@ function FlashCountdown({ endsAt }: { endsAt: string }) {
 }
 
 export default function FicheProduit() {
-  const { product: p, related, longueurVars, couleurVars, reviews, reviewStats, flash } = useLoaderData<typeof loader>();
+  const { product: p, media, related, longueurVars, couleurVars, reviews, reviewStats, flash, qa } = useLoaderData<typeof loader>();
 
   const [qty, setQty] = useState(1);
   const [cartState, setCartState] = useState<"idle" | "loading" | "added" | "error">("idle");
   const [openSection, setOpenSection] = useState<string | null>("description");
   const [selectedDensity, setSelectedDensity] = useState<number>(p.densite ?? 150);
   const [wishlist, setWishlist] = useState(false);
-  const [activeImg, setActiveImg] = useState(0);
+  const [wishlistLoaded, setWishlistLoaded] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [showSticky, setShowSticky] = useState(false);
+  const [copyDone, setCopyDone] = useState(false);
+  const ctaRef = useRef<HTMLDivElement>(null);
 
   const displayPrice = flash ? flash.price : p.price_cad;
   const originalPrice = flash ? p.price_cad : (p.compare_at_price_cad ?? null);
@@ -155,6 +242,46 @@ export default function FicheProduit() {
   const showLongueurVariants = longueurVars.length > 1;
   const showCouleurVariants = couleurVars.length > 1;
   const showDensityPicker = p.famille === "perruque" || p.famille === "closure" || p.famille === "frontal";
+
+  useEffect(() => {
+    fetch(`/api/wishlist?productId=${p.id}`)
+      .then(r => r.json())
+      .then((d: any) => { setWishlist(d.inWishlist); setWishlistLoaded(true); })
+      .catch(() => setWishlistLoaded(true));
+  }, [p.id]);
+
+  // Sticky footer : apparaît quand les boutons CTA sortent du viewport
+  useEffect(() => {
+    const el = ctaRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(([e]) => setShowSticky(!e.isIntersecting), { threshold: 0 });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  async function handleShare() {
+    const url = window.location.href;
+    const title = p.name;
+    const text = `${p.name} — ${displayPrice.toFixed(2)} $ CAD`;
+    if (navigator.share) {
+      try { await navigator.share({ title, text, url }); } catch { /* annulé */ }
+    } else {
+      await navigator.clipboard.writeText(url);
+      setCopyDone(true);
+      setTimeout(() => setCopyDone(false), 2000);
+    }
+  }
+
+  async function toggleWishlist() {
+    const res = await fetch("/api/wishlist", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ productId: p.id }),
+    });
+    if (res.status === 401) { window.location.href = "/compte/connexion"; return; }
+    const d = await res.json() as { inWishlist: boolean };
+    setWishlist(d.inWishlist);
+  }
 
   async function addToCart() {
     if (cartState === "loading") return;
@@ -186,11 +313,61 @@ export default function FicheProduit() {
     `Bonjour, je suis intéressée par : ${p.name}${p.longueur_po ? ` — ${p.longueur_po} po` : ""}${densiteLabel}. Prix: ${p.price_cad.toFixed(2)} $ CAD.`
   );
 
-  // Galerie : image principale + up to 4 miniatures
-  const galleryImages = p.image_key ? [p.image_key] : [];
+  const activeItem = media[activeIdx] ?? null;
+
+  // URL d'embed pour les vidéos
+  function videoEmbedUrl(url: string): string {
+    const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/\s]+)/);
+    if (yt) return `https://www.youtube.com/embed/${yt[1]}?autoplay=1&rel=0`;
+    const vimeo = url.match(/vimeo\.com\/(\d+)/);
+    if (vimeo) return `https://player.vimeo.com/video/${vimeo[1]}?autoplay=1`;
+    return url;
+  }
+
+  // JSON-LD Product schema
+  const jsonLd = {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: p.name,
+    description: p.description ?? undefined,
+    image: p.image_key ? [p.image_key] : undefined,
+    brand: { "@type": "Brand", name: "DDM Wigs & More" },
+    sku: p.sku ?? p.slug,
+    offers: {
+      "@type": "Offer",
+      url: `${BASE}/boutique/${p.slug}`,
+      priceCurrency: "CAD",
+      price: String(flash ? flash.price : p.price_cad),
+      availability: (p.stock ?? 0) > 0
+        ? "https://schema.org/InStock"
+        : "https://schema.org/OutOfStock",
+      seller: { "@type": "Organization", name: "DDM Wigs & More" },
+    },
+    ...(reviewStats.count > 0 ? {
+      aggregateRating: {
+        "@type": "AggregateRating",
+        ratingValue: reviewStats.avg.toFixed(1),
+        reviewCount: reviewStats.count,
+        bestRating: "5",
+        worstRating: "1",
+      },
+    } : {}),
+  };
+
+  const breadcrumbLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Accueil",  item: BASE },
+      { "@type": "ListItem", position: 2, name: "Boutique", item: `${BASE}/boutique` },
+      { "@type": "ListItem", position: 3, name: p.name,     item: `${BASE}/boutique/${p.slug}` },
+    ],
+  };
 
   return (
     <main className="max-w-[90rem] mx-auto px-6 md:px-10 lg:px-20 py-10">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbLd) }} />
 
       {/* Breadcrumb */}
       <nav className="flex items-center gap-2 font-sans text-xs text-on-surface-variant mb-8 flex-wrap">
@@ -214,11 +391,25 @@ export default function FicheProduit() {
 
         {/* ── Galerie ── */}
         <div className="space-y-4">
-          {/* Image principale */}
+          {/* Média principal */}
           <div className="aspect-[3/4] bg-surface-container overflow-hidden relative group">
-            {galleryImages[activeImg] ? (
-              <img src={galleryImages[activeImg]} alt={p.name}
-                className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]" />
+            {activeItem ? (
+              activeItem.type === "video" ? (
+                /* Lecteur vidéo intégré */
+                <iframe
+                  src={videoEmbedUrl(activeItem.url)}
+                  className="w-full h-full"
+                  allow="autoplay; fullscreen; picture-in-picture"
+                  allowFullScreen
+                  title={p.name}
+                />
+              ) : (
+                <img
+                  src={cfImage(activeItem.url, "zoom") ?? activeItem.url}
+                  alt={activeItem.alt_text ?? p.name}
+                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+                />
+              )
             ) : (
               <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-outline-variant">
                 <span className="material-symbols-outlined text-6xl">styler</span>
@@ -227,7 +418,7 @@ export default function FicheProduit() {
             )}
 
             {/* Badges */}
-            <div className="absolute top-4 left-4 flex flex-col gap-2">
+            <div className="absolute top-4 left-4 flex flex-col gap-2 pointer-events-none">
               {discount && (
                 <span className="bg-error text-on-error px-3 py-1 text-xs font-bold uppercase tracking-widest">
                   -{discount}%
@@ -245,11 +436,19 @@ export default function FicheProduit() {
               )}
             </div>
 
+            {/* Compteur médias (quand plusieurs) */}
+            {media.length > 1 && activeItem?.type !== "video" && (
+              <span className="absolute bottom-4 right-4 bg-black/50 text-white text-xs font-mono px-2 py-0.5">
+                {activeIdx + 1} / {media.length}
+              </span>
+            )}
+
             {/* Wishlist */}
             <button
-              onClick={() => setWishlist(w => !w)}
+              onClick={toggleWishlist}
               aria-label={wishlist ? "Retirer des favoris" : "Ajouter aux favoris"}
-              className="absolute top-4 right-4 w-9 h-9 bg-surface/90 backdrop-blur flex items-center justify-center hover:bg-surface transition-colors">
+              title={wishlistLoaded ? (wishlist ? "Retirer des favoris" : "Ajouter aux favoris") : "Chargement…"}
+              className="absolute top-4 right-4 w-9 h-9 bg-surface/90 backdrop-blur flex items-center justify-center hover:bg-surface transition-colors z-10">
               <span className={`material-symbols-outlined text-xl ${wishlist ? "text-error" : "text-on-surface-variant"}`}
                 style={{ fontVariationSettings: wishlist ? "'FILL' 1" : "'FILL' 0" }}>
                 favorite
@@ -257,21 +456,33 @@ export default function FicheProduit() {
             </button>
           </div>
 
-          {/* Miniatures */}
-          <div className="flex gap-2">
-            {galleryImages.map((src, i) => (
-              <button key={i} onClick={() => setActiveImg(i)}
-                className={`w-20 h-20 overflow-hidden shrink-0 border-2 transition-colors ${activeImg === i ? "border-primary" : "border-transparent hover:border-outline-variant"}`}>
-                <img src={src} alt="" className="w-full h-full object-cover" />
-              </button>
-            ))}
-            {/* Placeholders pour photos futures */}
-            {galleryImages.length > 0 && [1, 2, 3].map(i => (
-              <div key={i} className="w-20 h-20 border border-outline-variant/50 border-dashed bg-surface-container flex items-center justify-center shrink-0">
-                <span className="material-symbols-outlined text-outline-variant/60 text-lg">add_photo_alternate</span>
-              </div>
-            ))}
-          </div>
+          {/* Miniatures (images + vidéos) */}
+          {media.length > 1 && (
+            <div className="flex gap-2 flex-wrap">
+              {media.map((item, i) => {
+                const thumb = item.type === "image"
+                  ? (cfImage(item.url, "thumbnail") ?? item.url)
+                  : item.thumbnail_url;
+                return (
+                  <button key={i} onClick={() => setActiveIdx(i)}
+                    className={`w-20 h-20 overflow-hidden shrink-0 border-2 transition-colors relative ${activeIdx === i ? "border-primary" : "border-transparent hover:border-outline-variant"}`}>
+                    {thumb ? (
+                      <img src={thumb} alt={item.alt_text ?? ""} className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full bg-surface-container flex items-center justify-center">
+                        <span className="material-symbols-outlined text-outline-variant text-2xl">smart_display</span>
+                      </div>
+                    )}
+                    {item.type === "video" && (
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                        <span className="material-symbols-outlined text-white text-xl">play_circle</span>
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* ── Infos produit ── */}
@@ -282,7 +493,36 @@ export default function FicheProduit() {
             <p className="font-sans text-xs font-bold uppercase tracking-[0.2em] text-primary mb-2">
               {FAMILLE_LABELS[p.famille ?? ""] ?? "DDM Wigs"}
             </p>
-            <h1 className="font-serif text-3xl md:text-4xl text-on-surface leading-tight mb-3">{p.name}</h1>
+
+            {/* Tags produit */}
+            {(() => {
+              const autoTags: { label: string; style: string }[] = [];
+              if (p.featured === 1) autoTags.push({ label: "Best-seller", style: "bg-primary/10 text-primary border-primary/20" });
+              if (p.hd_lace === 1) autoTags.push({ label: "HD Lace", style: "bg-secondary/10 text-secondary border-secondary/20" });
+              if (p.glueless === 1) autoTags.push({ label: "Sans colle", style: "bg-secondary/10 text-secondary border-secondary/20" });
+              if (p.pret_a_porter === 1) autoTags.push({ label: "Prêt à porter", style: "bg-secondary/10 text-secondary border-secondary/20" });
+              const customTags = (p.tags ?? "").split(",").map((t: string) => t.trim()).filter((t: string) => t.length > 0);
+              const allTags = [...autoTags, ...customTags.map((t: string) => ({ label: t, style: "bg-surface-container text-on-surface-variant border-outline-variant/40" }))];
+              if (allTags.length === 0) return null;
+              return (
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  {allTags.map((tag, i) => (
+                    <span key={i} className={`inline-flex items-center px-2.5 py-0.5 border rounded-full font-sans text-[11px] font-semibold uppercase tracking-wider ${tag.style}`}>
+                      {tag.label}
+                    </span>
+                  ))}
+                </div>
+              );
+            })()}
+
+            <div className="flex items-start justify-between gap-2">
+              <h1 className="font-serif text-3xl md:text-4xl text-on-surface leading-tight mb-3">{p.name}</h1>
+              {/* Bouton partager */}
+              <button onClick={handleShare} title={copyDone ? "Lien copié !" : "Partager ce produit"}
+                className="shrink-0 mt-1 w-9 h-9 flex items-center justify-center border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
+                <span className="material-symbols-outlined text-lg">{copyDone ? "check" : "share"}</span>
+              </button>
+            </div>
 
             {/* Rating */}
             <div className="flex items-center gap-3">
@@ -444,7 +684,7 @@ export default function FicheProduit() {
           )}
 
           {/* Quantité + panier */}
-          <div className="flex items-center gap-3 mb-4">
+          <div ref={ctaRef} className="flex items-center gap-3 mb-4">
             <div className="flex items-center border border-outline-variant">
               <button onClick={() => setQty(q => Math.max(1, q - 1))}
                 className="w-10 h-12 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
@@ -488,10 +728,18 @@ export default function FicheProduit() {
           </a>
 
           {/* Trust badges */}
-          <div className="grid grid-cols-3 gap-3 pt-4 border-t border-outline-variant">
-            <TrustBadge icon="local_shipping" label="Livraison rapide" sub="Montréal & environs" />
-            <TrustBadge icon="verified" label="100% Cheveux humains" sub="Qualité premium" />
-            <TrustBadge icon="support_agent" label="Support 7j/7" sub="Par WhatsApp" />
+          <div className="flex flex-wrap items-center justify-between gap-y-2 pt-4 border-t border-outline-variant">
+            {[
+              { icon: "assignment_return", label: "30 Jours Retour" },
+              { icon: "local_shipping", label: "Livraison Gratuite" },
+              { icon: "schedule", label: "Expédition 72h" },
+              { icon: "verified", label: "100% Vrais Cheveux" },
+            ].map(({ icon, label }) => (
+              <div key={label} className="flex items-center gap-1.5 text-on-surface-variant">
+                <span className="material-symbols-outlined text-primary text-base" style={{ fontVariationSettings: "'FILL' 1" }}>{icon}</span>
+                <span className="font-sans text-xs font-semibold text-on-surface">{label}</span>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -599,6 +847,34 @@ export default function FicheProduit() {
         <ReviewsSection productId={p.id} reviews={reviews as Review[]} stats={reviewStats as ReviewStats} />
       </section>
 
+      {/* ── Questions & Réponses ── */}
+      <section id="qa" className="mb-20 max-w-4xl scroll-mt-24">
+        <QASection productId={p.id} items={qa as QAItem[]} />
+      </section>
+
+      {/* ── Sticky footer CTA ── */}
+      <div className={`fixed bottom-0 left-0 right-0 z-50 bg-surface border-t border-outline-variant shadow-lg transition-transform duration-300 ${showSticky ? "translate-y-0" : "translate-y-full"}`}>
+        <div className="max-w-[90rem] mx-auto px-4 md:px-10 py-3 flex items-center gap-4">
+          {media[0]?.type === "image" && cfImage(media[0].url, "thumbnail") && (
+            <img src={cfImage(media[0].url, "thumbnail")!} alt={p.name} className="w-12 h-12 object-cover shrink-0 hidden sm:block" />
+          )}
+          <div className="flex-1 min-w-0">
+            <p className="font-serif text-sm font-bold text-on-surface truncate">{p.name}</p>
+            <p className={`font-sans text-base font-bold ${flash ? "text-error" : "text-primary"}`}>
+              {displayPrice.toFixed(2)} $ CAD
+            </p>
+          </div>
+          <button onClick={addToCart} disabled={p.stock === 0 || cartState === "loading"}
+            className={`shrink-0 h-11 px-6 font-sans text-sm font-bold uppercase tracking-widest transition-all ${
+              cartState === "added" ? "bg-secondary text-on-secondary"
+                : p.stock === 0 ? "bg-surface-container text-on-surface-variant cursor-not-allowed"
+                : "bg-primary text-on-primary hover:opacity-90"
+            }`}>
+            {cartState === "added" ? "Ajouté !" : p.stock === 0 ? "Rupture" : "Acheter maintenant"}
+          </button>
+        </div>
+      </div>
+
       {/* ── Produits similaires ── */}
       {related.length > 0 && (
         <section>
@@ -651,7 +927,30 @@ function ReviewsSection({ productId, reviews, stats }: {
   const [name, setName] = useState("");
   const [rating, setRating] = useState(0);
   const [body, setBody] = useState("");
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
   const [submitState, setSubmitState] = useState<"idle" | "loading" | "success" | "error">("idle");
+
+  async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(e.target.files ?? []).slice(0, 5 - photoUrls.length);
+    if (files.length === 0) return;
+    setUploadingPhotos(true);
+    const urls: string[] = [];
+    for (const file of files) {
+      try {
+        const fd = new FormData();
+        fd.append("file", file);
+        const res = await fetch("/api/upload-image", { method: "POST", body: fd });
+        if (res.ok) {
+          const d = await res.json() as { imageUrl: string };
+          urls.push(d.imageUrl);
+        }
+      } catch { /* ignore */ }
+    }
+    setPhotoUrls(prev => [...prev, ...urls].slice(0, 5));
+    setUploadingPhotos(false);
+    e.target.value = "";
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -661,7 +960,7 @@ function ReviewsSection({ productId, reviews, stats }: {
       const res = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, customerName: name, rating, reviewBody: body }),
+        body: JSON.stringify({ productId, customerName: name, rating, reviewBody: body, photos: photoUrls }),
       });
       if (!res.ok) throw new Error();
       setSubmitState("success");
@@ -773,6 +1072,36 @@ function ReviewsSection({ productId, reviews, stats }: {
                   className="w-full px-3 py-2 border border-outline-variant bg-surface font-sans text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary transition-colors resize-none" />
               </div>
 
+              {/* Photos UGC */}
+              <div>
+                <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Vos photos (facultatif · max 5)
+                </label>
+                {photoUrls.length > 0 && (
+                  <div className="flex gap-2 flex-wrap mb-2">
+                    {photoUrls.map((url, i) => (
+                      <div key={i} className="relative w-16 h-16 shrink-0">
+                        <img src={`${url}/thumbnail`} alt="" className="w-full h-full object-cover" />
+                        <button type="button"
+                          onClick={() => setPhotoUrls(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1 -right-1 w-4 h-4 bg-error text-on-error rounded-full flex items-center justify-center">
+                          <span className="material-symbols-outlined text-[10px]">close</span>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {photoUrls.length < 5 && (
+                  <label className={`flex items-center gap-2 px-3 py-2 border border-dashed border-outline-variant cursor-pointer hover:border-primary transition-colors ${uploadingPhotos ? "opacity-50 pointer-events-none" : ""}`}>
+                    <span className="material-symbols-outlined text-on-surface-variant text-lg">add_photo_alternate</span>
+                    <span className="font-sans text-xs text-on-surface-variant">
+                      {uploadingPhotos ? "Envoi en cours…" : "Ajouter des photos"}
+                    </span>
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={handlePhotoSelect} />
+                  </label>
+                )}
+              </div>
+
               {submitState === "error" && (
                 <p className="font-sans text-xs text-error">Une erreur est survenue. Veuillez réessayer.</p>
               )}
@@ -815,11 +1144,135 @@ function ReviewsSection({ productId, reviews, stats }: {
                   {new Date(r.created_at).toLocaleDateString("fr-CA", { year: "numeric", month: "long", day: "numeric" })}
                 </p>
               </div>
-              {r.body && <p className="font-sans text-sm text-on-surface-variant leading-relaxed ml-11">{r.body}</p>}
+              {r.body && <p className="font-sans text-sm text-on-surface-variant leading-relaxed ml-11 mb-3">{r.body}</p>}
+              {r.photos && (() => {
+                let photos: string[] = [];
+                try { photos = JSON.parse(r.photos); } catch { /* */ }
+                if (photos.length === 0) return null;
+                return (
+                  <div className="flex gap-2 flex-wrap ml-11">
+                    {photos.map((url, i) => (
+                      <a key={i} href={`${url}/public`} target="_blank" rel="noopener noreferrer"
+                        className="w-20 h-20 overflow-hidden border border-outline-variant hover:border-primary transition-colors">
+                        <img src={`${url}/thumbnail`} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                      </a>
+                    ))}
+                  </div>
+                );
+              })()}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+// ─── QASection ──────────────────────────────────────────────────────────────
+
+function QASection({ productId, items }: { productId: number; items: QAItem[] }) {
+  const [name, setName] = useState("");
+  const [question, setQuestion] = useState("");
+  const [submitState, setSubmitState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [openId, setOpenId] = useState<number | null>(items[0]?.id ?? null);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !question.trim()) return;
+    setSubmitState("loading");
+    try {
+      const res = await fetch("/api/qa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ productId, customerName: name, question }),
+      });
+      if (!res.ok) throw new Error();
+      setSubmitState("success");
+    } catch {
+      setSubmitState("error");
+    }
+  }
+
+  return (
+    <div>
+      <h2 className="font-serif text-2xl md:text-3xl text-on-surface mb-8">Questions & Réponses</h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-12 mb-12">
+        {/* Liste des Q&A */}
+        <div>
+          {items.length === 0 ? (
+            <div className="py-8 text-center">
+              <span className="material-symbols-outlined text-5xl text-primary/30 block mb-2">help_outline</span>
+              <p className="font-sans text-sm text-on-surface-variant">Aucune question pour ce produit.</p>
+              <p className="font-sans text-sm text-on-surface-variant">Soyez la première à poser une question !</p>
+            </div>
+          ) : (
+            <div className="space-y-0 divide-y divide-outline-variant/30 border-t border-outline-variant">
+              {items.map(item => (
+                <div key={item.id}>
+                  <button onClick={() => setOpenId(openId === item.id ? null : item.id)}
+                    className="w-full flex items-start justify-between gap-3 py-4 text-left group">
+                    <p className="font-sans text-sm font-semibold text-on-surface group-hover:text-primary transition-colors">
+                      Q : {item.question}
+                    </p>
+                    <span className={`material-symbols-outlined text-on-surface-variant text-xl shrink-0 transition-transform ${openId === item.id ? "rotate-180" : ""}`}>
+                      expand_more
+                    </span>
+                  </button>
+                  {openId === item.id && (
+                    <div className="pb-4 -mt-1">
+                      <p className="font-sans text-xs font-bold text-primary uppercase tracking-wider mb-1">Réponse DDM Wigs</p>
+                      <p className="font-sans text-sm text-on-surface-variant leading-relaxed">{item.answer}</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Formulaire de question */}
+        <div>
+          <p className="font-sans text-sm font-bold uppercase tracking-wider text-on-surface mb-4">Poser une question</p>
+          {submitState === "success" ? (
+            <div className="flex items-start gap-3 p-4 bg-secondary/10 border border-secondary/30">
+              <span className="material-symbols-outlined text-secondary text-xl shrink-0 mt-0.5">check_circle</span>
+              <div>
+                <p className="font-sans text-sm font-semibold text-on-surface">Merci pour votre question !</p>
+                <p className="font-sans text-sm text-on-surface-variant">Notre équipe vous répondra dès que possible.</p>
+              </div>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div>
+                <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Votre prénom *
+                </label>
+                <input type="text" required maxLength={100}
+                  value={name} onChange={e => setName(e.target.value)}
+                  placeholder="Ex : Marie"
+                  className="w-full h-10 px-3 border border-outline-variant bg-surface font-sans text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary transition-colors" />
+              </div>
+              <div>
+                <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
+                  Votre question *
+                </label>
+                <textarea rows={3} required maxLength={500}
+                  value={question} onChange={e => setQuestion(e.target.value)}
+                  placeholder="Posez votre question sur ce produit…"
+                  className="w-full px-3 py-2 border border-outline-variant bg-surface font-sans text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary transition-colors resize-none" />
+              </div>
+              {submitState === "error" && (
+                <p className="font-sans text-xs text-error">Une erreur est survenue. Veuillez réessayer.</p>
+              )}
+              <button type="submit" disabled={submitState === "loading" || !name.trim() || !question.trim()}
+                className="px-6 py-2.5 bg-primary text-on-primary font-sans text-sm font-bold uppercase tracking-widest hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">
+                {submitState === "loading" ? "Envoi…" : "Envoyer ma question"}
+              </button>
+            </form>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -891,7 +1344,7 @@ function RelatedCard({ product: p }: { product: Product }) {
     <Link to={`/boutique/${p.slug}`} className="group block">
       <div className="aspect-[3/4] bg-surface-container overflow-hidden relative mb-3">
         {p.image_key ? (
-          <img src={p.image_key} alt={p.name}
+          <img src={cfImage(p.image_key, "card") ?? p.image_key} alt={p.name}
             className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
         ) : (
           <div className="w-full h-full bg-surface-container-high flex items-center justify-center">

@@ -12,6 +12,7 @@ interface ReviewRow {
   customer_name: string;
   rating: number;
   body: string | null;
+  photos: string | null;
   approved: number;
   created_at: string;
 }
@@ -32,7 +33,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   const rows = (await db.prepare(`
     SELECT r.id, r.product_id, p.name AS product_name, p.slug AS product_slug,
-           r.customer_name, r.rating, r.body, r.approved, r.created_at
+           r.customer_name, r.rating, r.body, r.photos, r.approved, r.created_at
     FROM reviews r
     JOIN products p ON p.id = r.product_id
     ${whereClause}
@@ -161,6 +162,21 @@ export default function AdminAvis() {
                 ) : (
                   <p className="font-sans text-xs text-on-surface-variant/50 italic">Aucun commentaire</p>
                 )}
+                {r.photos && (() => {
+                  let photos: string[] = [];
+                  try { photos = JSON.parse(r.photos); } catch { return null; }
+                  if (photos.length === 0) return null;
+                  return (
+                    <div className="flex gap-2 flex-wrap mt-2">
+                      {photos.map((url, i) => (
+                        <a key={i} href={`${url}/public`} target="_blank" rel="noopener noreferrer"
+                          className="w-14 h-14 overflow-hidden border border-outline-variant/40 hover:border-primary transition-colors">
+                          <img src={`${url}/thumbnail`} alt="" className="w-full h-full object-cover" />
+                        </a>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {r.approved === 1 && (
                   <span className="inline-flex items-center gap-1 mt-2 font-sans text-xs text-secondary font-semibold">

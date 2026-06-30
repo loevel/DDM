@@ -11,22 +11,23 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const customer = await getCustomer(customerId, context);
 
   const db = context.cloudflare.env.DB;
-  const [recentOrders, stats] = await Promise.all([
-    db
-      .prepare(
-        "SELECT reference, type, total_cad, status, created_at FROM orders WHERE customer_email = ? ORDER BY created_at DESC LIMIT 3"
-      )
+  const [recentOrders, stats, prefs, wishlistCount] = await Promise.all([
+    db.prepare("SELECT reference, type, total_cad, status, created_at FROM orders WHERE customer_email = ? ORDER BY created_at DESC LIMIT 3")
       .bind(customer!.email)
       .all<{ reference: string; type: string; total_cad: number; status: string; created_at: string }>(),
-    db
-      .prepare(
-        "SELECT COUNT(*) as total, SUM(total_cad) as spent FROM orders WHERE customer_email = ? AND status != 'cancelled'"
-      )
+    db.prepare("SELECT COUNT(*) as total, SUM(total_cad) as spent FROM orders WHERE customer_email = ? AND status != 'cancelled'")
       .bind(customer!.email)
       .first<{ total: number; spent: number | null }>(),
+    db.prepare("SELECT texture_preferee, budget_habituel, cap_size, quiz_result FROM customers WHERE id = ?")
+      .bind(customerId).first<any>(),
+    db.prepare("SELECT COUNT(*) as cnt FROM wishlists WHERE customer_id = ?")
+      .bind(customerId).first<{ cnt: number }>(),
   ]);
 
-  return json({ customer, recentOrders: recentOrders.results, stats });
+  const profileComplete = !!(prefs?.texture_preferee && prefs?.budget_habituel && prefs?.cap_size);
+  const hasQuiz = !!prefs?.quiz_result;
+
+  return json({ customer, recentOrders: recentOrders.results, stats, profileComplete, hasQuiz, wishlistCount: wishlistCount?.cnt ?? 0 });
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -38,7 +39,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function TableauDeBord() {
-  const { customer, recentOrders, stats } = useLoaderData<typeof loader>();
+  const { customer, recentOrders, stats, profileComplete, hasQuiz, wishlistCount } = useLoaderData<typeof loader>();
 
   return (
     <div className="space-y-8">
@@ -49,8 +50,34 @@ export default function TableauDeBord() {
         <p className="font-body-md text-body-md text-on-surface-variant">Bienvenue dans votre espace DDM Wigs & More.</p>
       </div>
 
+      {/* Bandeaux d'action rapide */}
+      {(!profileComplete || !hasQuiz) && (
+        <div className="space-y-2">
+          {!hasQuiz && (
+            <Link to="/quiz" className="flex items-center gap-4 bg-on-surface px-5 py-4 hover:opacity-90 transition-opacity group">
+              <span className="material-symbols-outlined text-primary-fixed text-2xl">auto_awesome</span>
+              <div className="flex-1">
+                <p className="font-semibold text-white text-sm">Faites le quiz perruque</p>
+                <p className="text-white/60 text-xs">2 min · On vous trouve la perruque parfaite</p>
+              </div>
+              <span className="material-symbols-outlined text-white/40 group-hover:text-white transition-colors">arrow_forward</span>
+            </Link>
+          )}
+          {!profileComplete && (
+            <Link to="/compte/profil" className="flex items-center gap-4 bg-surface border border-primary/20 px-5 py-4 hover:border-primary transition-colors group">
+              <span className="material-symbols-outlined text-primary text-2xl">person_add</span>
+              <div className="flex-1">
+                <p className="font-semibold text-on-surface text-sm">Complétez vos préférences capillaires</p>
+                <p className="text-on-surface-variant text-xs">Texture, cap size, budget — pour des recommandations personnalisées</p>
+              </div>
+              <span className="material-symbols-outlined text-on-surface-variant group-hover:text-primary transition-colors">arrow_forward</span>
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Stats */}
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-3 gap-4">
         <div className="bg-surface border border-outline-variant/30 p-6 rounded-sm">
           <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-2">Commandes</p>
           <p className="font-headline-lg text-headline-lg text-primary">{stats?.total ?? 0}</p>
@@ -60,6 +87,10 @@ export default function TableauDeBord() {
           <p className="font-headline-lg text-headline-lg text-primary">
             {stats?.spent ? `${stats.spent.toFixed(0)} $` : "0 $"}
           </p>
+        </div>
+        <div className="bg-surface border border-outline-variant/30 p-6 rounded-sm">
+          <p className="font-label-md text-label-md text-on-surface-variant uppercase tracking-widest mb-2">Favoris</p>
+          <p className="font-headline-lg text-headline-lg text-primary">{wishlistCount}</p>
         </div>
       </div>
 
@@ -104,11 +135,25 @@ export default function TableauDeBord() {
 
       {/* Quick links */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Link to="/compte/quiz" className="flex items-center gap-4 bg-surface border border-outline-variant/30 rounded-sm px-6 py-4 hover:border-primary/40 transition-colors group">
+          <span className="material-symbols-outlined text-primary text-2xl">auto_awesome</span>
+          <div>
+            <p className="font-label-md text-label-md text-on-surface">Mon profil perruque</p>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">{hasQuiz ? "Voir mes recommandations" : "Faire le quiz · 2 min"}</p>
+          </div>
+        </Link>
+        <Link to="/compte/favoris" className="flex items-center gap-4 bg-surface border border-outline-variant/30 rounded-sm px-6 py-4 hover:border-primary/40 transition-colors group">
+          <span className="material-symbols-outlined text-primary text-2xl">favorite</span>
+          <div>
+            <p className="font-label-md text-label-md text-on-surface">Mes favoris</p>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">{wishlistCount > 0 ? `${wishlistCount} produit${wishlistCount > 1 ? "s" : ""} sauvegardé${wishlistCount > 1 ? "s" : ""}` : "Aucun favori encore"}</p>
+          </div>
+        </Link>
         <Link to="/compte/profil" className="flex items-center gap-4 bg-surface border border-outline-variant/30 rounded-sm px-6 py-4 hover:border-primary/40 transition-colors group">
           <span className="material-symbols-outlined text-primary text-2xl">person</span>
           <div>
-            <p className="font-label-md text-label-md text-on-surface">Compléter mon profil</p>
-            <p className="font-body-sm text-body-sm text-on-surface-variant">Nom, téléphone, adresse</p>
+            <p className="font-label-md text-label-md text-on-surface">Mes informations</p>
+            <p className="font-body-sm text-body-sm text-on-surface-variant">Profil, préférences, adresses</p>
           </div>
         </Link>
         <Link to="/boutique" className="flex items-center gap-4 bg-surface border border-outline-variant/30 rounded-sm px-6 py-4 hover:border-primary/40 transition-colors group">

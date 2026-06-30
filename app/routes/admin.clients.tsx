@@ -35,7 +35,14 @@ export default function AdminClients() {
 
   return (
     <div className="p-8">
-      <h1 className="text-2xl font-bold text-on-surface mb-6">Clients & Communication</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-on-surface">Clients & Communication</h1>
+        <a href="/api/export-csv?type=clients"
+          className="flex items-center gap-1.5 text-sm border border-outline-variant px-4 py-2 text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
+          <span className="material-symbols-outlined text-base">download</span>
+          Exporter CSV
+        </a>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-0 mb-6 border-b border-outline-variant/30">

@@ -4,7 +4,7 @@ import { Link } from "@remix-run/react";
 
 export const meta: MetaFunction = () => [
   { title: "FAQ - DDM Wigs & More" },
-  { name: "description", content: "Trouvez toutes les réponses à vos questions concernant nos produits, commandes et services de location." },
+  { name: "description", content: "Trouvez toutes les réponses à vos questions concernant nos produits, commandes et livraisons." },
 ];
 
 interface FaqItem {
@@ -67,15 +67,11 @@ const FAQ_DATA: FaqCategory[] = [
   },
   {
     id: "location",
-    label: "Location & Retours",
+    label: "Retours",
     items: [
       {
         question: "Quelles sont les conditions de retour pour un achat ?",
         answer: "Vous disposez de 14 jours pour nous retourner les articles non portés, dans leur état et emballage d'origine. La dentelle (lace) ne doit pas avoir été coupée et l'article ne doit présenter aucun signe d'usure ou d'altération. Les frais de retour sont à votre charge.",
-      },
-      {
-        question: "Comment fonctionne le service de location ?",
-        answer: "Sélectionnez votre style, choisissez la durée (journalière ou hebdomadaire), et votre perruque arrive 24h avant votre événement. Au retour, placez-la dans la pochette stérilisée fournie et déposez-la dans n'importe quel bureau de poste. Le nettoyage professionnel est inclus.",
       },
     ],
   },
@@ -134,7 +130,7 @@ export default function Faq() {
       <section className="py-section-gap-mobile md:py-section-gap-desktop px-4 md:px-grid-margin-desktop max-w-container-max-width mx-auto text-center">
         <h1 className="font-headline-xl text-headline-xl text-on-surface mb-6">Questions Fréquentes</h1>
         <p className="font-body-lg text-body-lg text-on-surface-variant max-w-2xl mx-auto">
-          Votre tranquillité d'esprit est notre priorité. Trouvez ici toutes les réponses à vos questions concernant nos produits, vos commandes et nos services de location pour une expérience fluide et raffinée.
+          Votre tranquillité d'esprit est notre priorité. Trouvez ici toutes les réponses à vos questions concernant nos produits, vos commandes et nos livraisons pour une expérience fluide et raffinée.
         </p>
       </section>
 

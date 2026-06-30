@@ -8,6 +8,7 @@ interface Announcement {
   link_to: string | null;
   countdown_to: string | null;
   bg_color: string | null;
+  height_px: number | null;
 }
 
 const ROTATE_INTERVAL = 4500;
@@ -92,11 +93,11 @@ export function AnnouncementBar() {
 
       <div
         className="w-full z-[60] text-white text-[12px] font-sans font-semibold transition-colors duration-500"
-        style={{ backgroundColor: ann.bg_color || "#1b1c1c" }}
+        style={{ backgroundColor: ann.bg_color || "#1b1c1c", minHeight: `${ann.height_px ?? 40}px` }}
         onMouseEnter={() => setPaused(true)}
         onMouseLeave={() => setPaused(false)}
       >
-        <div className="relative flex items-center justify-center h-10 max-w-[90rem] mx-auto px-14">
+        <div className="relative flex items-center justify-center max-w-[90rem] mx-auto px-14" style={{ minHeight: `${ann.height_px ?? 40}px` }}>
 
           {announcements.length > 1 && (
             <button onClick={() => go(-1)} aria-label="Annonce précédente"

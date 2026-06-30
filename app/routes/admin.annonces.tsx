@@ -12,6 +12,7 @@ interface Announcement {
   countdown_to: string | null;
   highlight: number;
   bg_color: string | null;
+  height_px: number;
   active: number;
   position: number;
   created_at: string;
@@ -56,9 +57,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!text) return json({ error: "Le texte est requis." }, { status: 400 });
     const { results: ex } = await db.prepare("SELECT MAX(position) as max_pos FROM announcements").all();
     const maxPos = (ex?.[0] as any)?.max_pos ?? -1;
+    const height_px = parseInt((form.get("height_px") as string) || "40") || 40;
     await db.prepare(
-      "INSERT INTO announcements (text, link_label, link_to, countdown_to, bg_color, highlight, active, position) VALUES (?, ?, ?, ?, ?, 0, 1, ?)"
-    ).bind(text, link_label, link_to, countdown_to, bg_color, maxPos + 1).run();
+      "INSERT INTO announcements (text, link_label, link_to, countdown_to, bg_color, height_px, highlight, active, position) VALUES (?, ?, ?, ?, ?, ?, 0, 1, ?)"
+    ).bind(text, link_label, link_to, countdown_to, bg_color, height_px, maxPos + 1).run();
   }
 
   if (intent === "update") {
@@ -68,10 +70,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const link_to      = (form.get("link_to") as string)?.trim() || null;
     const countdown_to = (form.get("countdown_to") as string)?.trim() || null;
     const bg_color     = (form.get("bg_color") as string) || "#1b1c1c";
+    const height_px = parseInt((form.get("height_px") as string) || "40") || 40;
     if (!text) return json({ error: "Le texte est requis." }, { status: 400 });
     await db.prepare(
-      "UPDATE announcements SET text = ?, link_label = ?, link_to = ?, countdown_to = ?, bg_color = ? WHERE id = ?"
-    ).bind(text, link_label, link_to, countdown_to, bg_color, id).run();
+      "UPDATE announcements SET text = ?, link_label = ?, link_to = ?, countdown_to = ?, bg_color = ?, height_px = ? WHERE id = ?"
+    ).bind(text, link_label, link_to, countdown_to, bg_color, height_px, id).run();
   }
 
   if (intent === "toggle") {
@@ -236,10 +239,27 @@ function AnnounceForm({
         />
       </div>
 
+      {/* Hauteur de la barre */}
+      <div>
+        <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
+          Hauteur (px)
+        </label>
+        <div className="flex items-center gap-2">
+          <input
+            name="height_px"
+            type="number"
+            min="28" max="120" step="4"
+            defaultValue={defaultValues?.height_px ?? 40}
+            className="w-24 h-10 px-3 border border-outline-variant bg-surface font-sans text-sm focus:outline-none focus:border-primary transition-colors"
+          />
+          <span className="font-sans text-xs text-on-surface-variant">px · défaut : 40</span>
+        </div>
+      </div>
+
       {/* Aperçu mini */}
       <div className="flex items-end">
-        <div className="w-full h-10 flex items-center justify-center text-white text-xs font-semibold font-sans rounded-sm"
-          style={{ backgroundColor: bgColor }}>
+        <div className="w-full flex items-center justify-center text-white text-xs font-semibold font-sans rounded-sm"
+          style={{ backgroundColor: bgColor, height: `${defaultValues?.height_px ?? 40}px` }}>
           {defaultValues?.text ? defaultValues.text.slice(0, 40) + (defaultValues.text.length > 40 ? "…" : "") : "Aperçu de la couleur"}
         </div>
       </div>
