@@ -32,23 +32,93 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
   return json({ order, items: items ?? [] });
 }
 
+type OrderRow = { reference: string; customer_name: string; customer_email: string };
+
+async function sendOrderStatusEmail(
+  resendKey: string,
+  order: OrderRow,
+  status: string,
+  extra?: { tracking?: string; carrier?: string }
+) {
+  const SUBJECT: Record<string, string> = {
+    confirmed: `Votre commande ${order.reference} est confirmée ✅`,
+    shipped:   `Votre commande ${order.reference} a été expédiée 📦`,
+    delivered: `Votre commande ${order.reference} a été livrée 🎉`,
+    cancelled: `Votre commande ${order.reference} a été annulée`,
+  };
+  const subject = SUBJECT[status];
+  if (!subject) return; // pending ou inconnu → pas d'email
+
+  const bodyMap: Record<string, string> = {
+    confirmed: `
+      <p>Bonne nouvelle ! Votre commande <strong>${order.reference}</strong> a été confirmée et est en cours de préparation.</p>
+      <p>Nous vous enverrons un autre email dès qu'elle sera expédiée.</p>`,
+    shipped: `
+      <p>Votre commande <strong>${order.reference}</strong> est en route !</p>
+      ${extra?.carrier ? `<p><strong>Transporteur :</strong> ${extra.carrier}</p>` : ""}
+      ${extra?.tracking ? `<p><strong>Numéro de suivi :</strong> <code style="background:#f0ebe6;padding:2px 6px;border-radius:3px">${extra.tracking}</code></p>` : ""}
+      <p>Utilisez ce numéro pour suivre votre colis sur le site du transporteur.</p>`,
+    delivered: `
+      <p>Votre commande <strong>${order.reference}</strong> a bien été livrée. Nous espérons que vous êtes satisfaite !</p>
+      <p>N'hésitez pas à nous contacter si vous avez la moindre question.</p>`,
+    cancelled: `
+      <p>Votre commande <strong>${order.reference}</strong> a été annulée.</p>
+      <p>Si vous avez des questions, n'hésitez pas à nous contacter.</p>`,
+  };
+
+  const html = `
+    <div style="font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;background:#fcf9f8">
+      <p style="font-size:22px;font-weight:800;color:#7d562d;letter-spacing:0.05em;margin-bottom:4px">DDM WIGS & MORE</p>
+      <hr style="border:none;border-top:1px solid #d4c4b7;margin:16px 0 32px">
+      <p style="font-size:16px;color:#1b1c1c;margin-bottom:16px">Bonjour ${order.customer_name},</p>
+      <div style="font-size:15px;color:#50453b;line-height:1.7">${bodyMap[status]}</div>
+      <p style="font-size:12px;color:#82756a;margin-top:40px;line-height:1.5">
+        Merci de faire confiance à DDM Wigs & More.<br>— L'équipe DDM
+      </p>
+    </div>`;
+
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: "DDM Wigs & More <noreply@ddmwigs.com>",
+      to: [order.customer_email],
+      subject,
+      html,
+    }),
+  });
+  if (!res.ok) throw new Error(`Resend ${res.status}`);
+}
+
 export async function action({ params, request, context }: ActionFunctionArgs) {
   const f = await request.formData();
   const g = (k: string) => String(f.get(k) ?? "").trim();
   const db = context.cloudflare.env.DB;
+  const resendKey = (context.cloudflare.env as any).RESEND_API_KEY as string | undefined;
   const intent = g("_action");
 
   if (intent === "update_status") {
+    const newStatus = g("status");
+    const order = await db.prepare("SELECT reference, customer_name, customer_email FROM orders WHERE id = ?")
+      .bind(params.id).first<OrderRow>();
+    if (!order) throw new Response("Commande introuvable", { status: 404 });
+
     await db.prepare("UPDATE orders SET status = ? WHERE id = ?")
-      .bind(g("status"), params.id).run();
-    return json({ ok: true, msg: "Statut mis à jour." });
+      .bind(newStatus, params.id).run();
+
+    let emailMsg = "";
+    if (resendKey) {
+      try { await sendOrderStatusEmail(resendKey, order, newStatus); emailMsg = " Email envoyé." }
+      catch { emailMsg = " (Échec envoi email)"; }
+    }
+    return json({ ok: true, msg: `Statut mis à jour.${emailMsg}` });
   }
 
   if (intent === "update_tracking") {
     const tracking = g("tracking_number");
     const carrier = g("tracking_carrier");
     const order = await db.prepare("SELECT * FROM orders WHERE id = ?")
-      .bind(params.id).first() as any;
+      .bind(params.id).first<any>();
     if (!order) throw new Response("Commande introuvable", { status: 404 });
 
     const newStatus = tracking ? "shipped" : order.status;
@@ -56,18 +126,11 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       .bind(tracking || null, carrier || null, newStatus, params.id).run();
 
     let emailMsg = "";
-    if (tracking && context.cloudflare.env.EMAIL) {
+    if (tracking && resendKey) {
       try {
-        await context.cloudflare.env.EMAIL.send({
-          from: { email: "no-reply@ddmwigs.ca", name: "DDM Wigs & More" },
-          to: [{ email: order.customer_email }],
-          subject: `Votre commande ${order.reference} a été expédiée`,
-          text: `Bonjour ${order.customer_name},\n\nVotre commande ${order.reference} a été expédiée via ${carrier}.\nNuméro de suivi: ${tracking}\n\nMerci de votre confiance.\n— DDM Wigs & More`,
-        });
-        emailMsg = " Email envoyé au client.";
-      } catch (e) {
-        emailMsg = " (Échec de l'envoi de l'email)";
-      }
+        await sendOrderStatusEmail(resendKey, order, "shipped", { tracking, carrier });
+        emailMsg = " Email envoyé.";
+      } catch { emailMsg = " (Échec envoi email)"; }
     }
     return json({ ok: true, msg: `Suivi enregistré.${emailMsg}` });
   }
