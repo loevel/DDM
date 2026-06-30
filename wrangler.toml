@@ -16,16 +16,13 @@ bucket_name = "ddm-wigs-assets"
 binding = "CACHE"
 id = "5927b4f2125d40af8892a7edf81f4802"
 
-send_email = [
-  { name = "EMAIL", allowed_destination_addresses = ["davesihanou@gmail.com"] }
-]
-
 [vars]
 ENVIRONMENT = "production"
 CF_ACCOUNT_ID = ""     # à remplir — visible dans le tableau de bord Cloudflare (URL: dash.cloudflare.com → Images)
 CF_ACCOUNT_HASH = ""   # à remplir — visible dans Images → "Account Hash"
 STRIPE_PUBLISHABLE_KEY = ""  # à remplir — Stripe Dashboard → Developers → API keys → Publishable key (pk_live_...)
 # Secrets (à ajouter dans Cloudflare Pages → Settings → Environment variables) :
+# RESEND_API_KEY        — resend.com → API Keys → Create API Key
 # CF_IMAGES_TOKEN    — token Cloudflare Images
 # STRIPE_SECRET_KEY  — Stripe → Developers → API keys → Secret key (sk_live_...)
 # STRIPE_WEBHOOK_SECRET — Stripe → Developers → Webhooks → Signing secret (whsec_...)

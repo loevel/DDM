@@ -1,13 +1,7 @@
-import { createMimeMessage } from "mimetext/browser";
 import type { AppLoadContext } from "@remix-run/cloudflare";
 
-// EmailMessage vient de cloudflare:email — injecté dans globalThis par server.ts
-// car Vite ne peut pas résoudre ce module virtuel Cloudflare
-const getEmailMessage = () =>
-  (globalThis as any).__CF_EmailMessage as typeof import("cloudflare:email").EmailMessage;
-
 const TOKEN_TTL_MIN = 15;
-const FROM_ADDRESS = "noreply@ddmwigs.ca";
+const FROM_ADDRESS = "noreply@ddmwigs.com";
 const FROM_NAME = "DDM Wigs & More";
 
 export async function sendMagicLink(
@@ -52,22 +46,33 @@ export async function sendMagicLink(
     </div>
   `;
 
-  const emailBinding = (context.cloudflare.env as any).EMAIL as { send: (msg: unknown) => Promise<void> } | undefined;
+  const resendApiKey = (context.cloudflare.env as any).RESEND_API_KEY as string | undefined;
 
-  if (!emailBinding) {
+  if (!resendApiKey) {
+    // Mode dev : affiche le lien dans les logs Cloudflare
     console.log(`[DEV] Magic link pour ${email} → ${magicUrl}`);
     return;
   }
 
-  const msg = createMimeMessage();
-  msg.setSender({ name: FROM_NAME, addr: FROM_ADDRESS });
-  msg.setRecipient(email);
-  msg.setSubject("Votre lien de connexion — DDM Wigs & More");
-  msg.addMessage({ contentType: "text/html", data: htmlBody });
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${resendApiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      from: `${FROM_NAME} <${FROM_ADDRESS}>`,
+      to: [email],
+      subject: "Votre lien de connexion — DDM Wigs & More",
+      html: htmlBody,
+    }),
+  });
 
-  const EmailMessage = getEmailMessage();
-  const message = new EmailMessage(FROM_ADDRESS, email, msg.asRaw());
-  await emailBinding.send(message);
+  if (!res.ok) {
+    const err = await res.text();
+    console.error(`[Resend] Erreur envoi email: ${res.status} — ${err}`);
+    throw new Error("Impossible d'envoyer l'email de connexion.");
+  }
 }
 
 export async function validateToken(
