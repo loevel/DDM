@@ -5,7 +5,9 @@ import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
 export async function loader({ params, request }: LoaderFunctionArgs) {
   const code = params.code ?? "";
   const url = new URL(request.url);
-  const next = url.searchParams.get("to") ?? "/boutique";
+  const rawNext = url.searchParams.get("to") ?? "/boutique";
+  // Autoriser uniquement les URLs relatives pour éviter les redirections ouvertes
+  const next = rawNext.startsWith("/") && !rawNext.startsWith("//") ? rawNext : "/boutique";
 
   return redirect(next, {
     headers: {

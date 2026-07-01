@@ -17,7 +17,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 export async function action({ request, context }: ActionFunctionArgs) {
   const form = await request.formData();
   const password = String(form.get("password") ?? "");
-  const secret = context.cloudflare.env.ADMIN_SECRET ?? "ddm-admin-2024";
+  const secret = context.cloudflare.env.ADMIN_SECRET;
+  if (!secret) return { error: "Configuration manquante (ADMIN_SECRET non défini)." };
 
   if (password !== secret) {
     return { error: "Mot de passe incorrect." };

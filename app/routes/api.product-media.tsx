@@ -1,14 +1,11 @@
-import { json } from "@remix-run/cloudflare";
+import { json, redirect } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
+import { isAdminAuthenticated } from "~/lib/admin-session.server";
 
-// API de gestion des médias produit (galerie)
-//
-//  DELETE /api/product-media?mediaId=X        → supprime un média
-//  POST   /api/product-media                  → ajoute un média
-//         body JSON : { productId, url, position?, alt_text?, type? }
-//  PATCH  /api/product-media                  → met à jour position et/ou alt_text
-//         body JSON : { id, position?, alt_text? }
+// API de gestion des médias produit (galerie) — réservée aux admins
 export async function action({ request, context }: ActionFunctionArgs) {
+  const authed = await isAdminAuthenticated(request, context as any);
+  if (!authed) throw redirect("/admin/connexion");
   const db = context.cloudflare.env.DB;
   const method = request.method.toUpperCase();
 

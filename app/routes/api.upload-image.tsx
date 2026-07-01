@@ -1,12 +1,19 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
+import { isAdminAuthenticated } from "~/lib/admin-session.server";
+import { getCustomerId } from "~/lib/session.server";
 
 // POST /api/upload-image
-// Body: multipart/form-data avec champ "file"
-// Retourne: { imageUrl: string } — URL de base CF Images (sans variante)
+// Autorisé : admin OU client connecté (upload photos d'avis)
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== "POST") {
     return json({ error: "Méthode non autorisée" }, { status: 405 });
+  }
+
+  const isAdmin = await isAdminAuthenticated(request, context as any).catch(() => false);
+  if (!isAdmin) {
+    const customerId = await getCustomerId(request, context as any).catch(() => null);
+    if (!customerId) return json({ error: "Non autorisé" }, { status: 401 });
   }
 
   const env = (context as any).cloudflare.env;
