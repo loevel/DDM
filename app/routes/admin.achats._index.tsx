@@ -65,11 +65,18 @@ export default function AdminAchats() {
             </p>
           )}
         </div>
-        <Link to="/admin/achats/nouveau"
-          className="bg-primary text-on-primary px-5 py-2.5 text-sm font-semibold uppercase tracking-wider hover:opacity-90 flex items-center gap-2">
-          <span className="material-symbols-outlined text-lg">add</span>
-          Nouvelle commande
-        </Link>
+        <div className="flex items-center gap-3">
+          <a href={`/api/export-csv?type=achats${statut ? `&statut=${statut}` : ""}`}
+            className="flex items-center gap-1 text-xs text-on-surface-variant hover:text-primary border border-outline-variant px-3 py-2 transition-colors">
+            <span className="material-symbols-outlined text-base">download</span>
+            Exporter CSV
+          </a>
+          <Link to="/admin/achats/nouveau"
+            className="bg-primary text-on-primary px-5 py-2.5 text-sm font-semibold uppercase tracking-wider hover:opacity-90 flex items-center gap-2">
+            <span className="material-symbols-outlined text-lg">add</span>
+            Nouvelle commande
+          </Link>
+        </div>
       </div>
 
       {/* Filtres statut */}
