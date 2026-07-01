@@ -11,14 +11,19 @@ export async function loader({ context }: LoaderFunctionArgs) {
 
   const { results: products } = await db.prepare(`
     SELECT p.*,
+      f.nom as fournisseur_nom,
       COALESCE((SELECT SUM(sm.quantite) FROM stock_mouvements sm WHERE sm.product_id = p.id AND sm.type = 'vente'), 0) as total_vendu,
       COALESCE((SELECT SUM(sm.quantite * sm.cout_unitaire_cad) FROM stock_mouvements sm WHERE sm.product_id = p.id AND sm.type = 'reception'), 0) as total_cout_achats
     FROM products p
+    LEFT JOIN fournisseurs f ON f.id = p.fournisseur_id
     ORDER BY p.name
   `).all();
 
   const { results: commandesFournisseurs } = await db.prepare(`
-    SELECT * FROM commandes_fournisseurs ORDER BY created_at DESC LIMIT 20
+    SELECT cf.*,
+      COALESCE((SELECT SUM(cfi.quantite_commandee * cfi.prix_unitaire_usd) FROM commandes_fournisseurs_items cfi WHERE cfi.commande_id = cf.id), 0) as montant_articles_usd
+    FROM commandes_fournisseurs cf
+    ORDER BY cf.created_at DESC LIMIT 20
   `).all();
 
   const { results: retours } = await db.prepare(`
@@ -80,7 +85,7 @@ export default function AdminAnalytique() {
   const totalVendu = ps.reduce((s, p) => s + (p.total_vendu ?? 0), 0);
   const totalAchatsCAD = cfs
     .filter(c => c.statut !== "annulee")
-    .reduce((s, c) => s + (c.montant_total_usd ?? 0) * (c.taux_change ?? TAUX), 0);
+    .reduce((s, c) => s + ((c.montant_articles_usd ?? 0) + (c.frais_expedition_usd ?? 0)) * (c.taux_change ?? TAUX) + (c.frais_douane_cad ?? 0), 0);
 
   const ruptures = ps.filter(p => p.stock === 0).length;
   const alertes = ps.filter(p => p.stock > 0 && p.stock <= (p.seuil_alerte_stock ?? 3)).length;
@@ -123,7 +128,7 @@ export default function AdminAnalytique() {
   // --- Top ventes par fournisseur ---
   const parFournisseur: Record<string, { vendu: number; valeur: number; count: number }> = {};
   ps.forEach(p => {
-    const f = p.fournisseur ?? "Inconnu";
+    const f = p.fournisseur_nom ?? p.fournisseur ?? "Inconnu";
     if (!parFournisseur[f]) parFournisseur[f] = { vendu: 0, valeur: 0, count: 0 };
     parFournisseur[f].vendu += p.total_vendu ?? 0;
     parFournisseur[f].valeur += p.stock * p.price_cad;
@@ -206,7 +211,7 @@ export default function AdminAnalytique() {
                   <p className="text-[10px] text-on-surface-variant">
                     Classe <span className={p.abc === "A" ? "text-error font-bold" : "text-yellow-600 font-bold"}>{p.abc}</span>
                     {" · "}Stock: <span className={p.stock === 0 ? "text-error font-bold" : "text-yellow-600 font-bold"}>{p.stock}</span>
-                    {p.fournisseur && ` · ${p.fournisseur}`}
+                    {(p.fournisseur_nom || p.fournisseur) && ` · ${p.fournisseur_nom ?? p.fournisseur}`}
                   </p>
                 </div>
                 <Link to="/admin/achats/nouveau" className="text-[10px] px-2 py-1 bg-primary text-on-primary font-semibold whitespace-nowrap hover:opacity-80">
