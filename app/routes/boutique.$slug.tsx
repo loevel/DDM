@@ -6,6 +6,8 @@ import { getDB, getProducts } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
 import { cfImage } from "~/lib/images";
 import { DEMO_MAP } from "~/lib/demo-products";
+import { getCustomerId } from "~/lib/session.server";
+import { getCustomer } from "~/lib/auth.server";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -45,7 +47,7 @@ interface ProductVariant { id: number; name: string; price_adjustment_cad: numbe
 
 // ─── Loader ────────────────────────────────────────────────────────────────
 
-export async function loader({ params, context }: LoaderFunctionArgs) {
+export async function loader({ params, request, context }: LoaderFunctionArgs) {
   const db = getDB(context as any);
   const product = await db
     .prepare("SELECT * FROM products WHERE slug = ?")
@@ -83,12 +85,18 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
       ).bind(product.famille, product.longueur_po).all<CouleurVariant>()).results ?? []
     : [];
 
+  // Session cliente
+  const customerId = await getCustomerId(request, context as any).catch(() => null);
+  const currentCustomer = customerId ? await getCustomer(customerId, context as any).catch(() => null) : null;
+
   // Avis approuvés (table may not exist yet → graceful fallback)
   let reviews: Review[] = [];
   let reviewStats: ReviewStats = { count: 0, avg: 0, dist: [0, 0, 0, 0, 0] };
+  let hasPurchased = false;
+  let alreadyReviewed = false;
   try {
     const rows = (await db.prepare(
-      "SELECT id, customer_name, rating, body, photos, created_at FROM reviews WHERE product_id = ? AND approved = 1 ORDER BY created_at DESC LIMIT 20"
+      "SELECT id, customer_name, rating, body, photos, verified_purchase, created_at FROM reviews WHERE product_id = ? AND approved = 1 ORDER BY created_at DESC LIMIT 20"
     ).bind(product.id).all<Review>()).results ?? [];
     reviews = rows;
     if (rows.length > 0) {
@@ -96,6 +104,18 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
       let sum = 0;
       rows.forEach(r => { sum += r.rating; dist[r.rating - 1]++; });
       reviewStats = { count: rows.length, avg: sum / rows.length, dist };
+    }
+    if (currentCustomer) {
+      const purchase = await db.prepare(`
+        SELECT oi.id FROM order_items oi
+        JOIN orders o ON o.id = oi.order_id
+        WHERE o.customer_email = ? AND oi.product_id = ? AND o.payment_status = 'paid'
+        LIMIT 1
+      `).bind(currentCustomer.email, product.id).first();
+      hasPurchased = !!purchase;
+      const existing = await db.prepare("SELECT id FROM reviews WHERE product_id = ? AND customer_email = ?")
+        .bind(product.id, currentCustomer.email).first();
+      alreadyReviewed = !!existing;
     }
   } catch {
     // table reviews pas encore créée
@@ -147,7 +167,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     if (row) flash = { price: row.flash_price_cad, ends_at: row.ends_at };
   } catch { /* table pas encore créée */ }
 
-  return json({ product, media, related, longueurVars, couleurVars, productVariants, reviews, reviewStats, flash, qa });
+  return json({ product, media, related, longueurVars, couleurVars, productVariants, reviews, reviewStats, flash, qa, currentCustomer, hasPurchased, alreadyReviewed });
 }
 
 const BASE = "https://ddmwigs.com";
@@ -230,7 +250,7 @@ function FlashCountdown({ endsAt }: { endsAt: string }) {
 }
 
 export default function FicheProduit() {
-  const { product: p, media, related, longueurVars, couleurVars, productVariants, reviews, reviewStats, flash, qa } = useLoaderData<typeof loader>();
+  const { product: p, media, related, longueurVars, couleurVars, productVariants, reviews, reviewStats, flash, qa, currentCustomer, hasPurchased, alreadyReviewed } = useLoaderData<typeof loader>();
 
   const [qty, setQty] = useState(1);
   const [cartState, setCartState] = useState<"idle" | "loading" | "added" | "error">("idle");
@@ -900,7 +920,15 @@ export default function FicheProduit() {
 
       {/* ── Avis clients ── */}
       <section id="avis" className="mb-20 max-w-4xl scroll-mt-24">
-        <ReviewsSection productId={p.id} reviews={reviews as Review[]} stats={reviewStats as ReviewStats} />
+        <ReviewsSection
+          productId={p.id}
+          productSlug={p.slug}
+          reviews={reviews as Review[]}
+          stats={reviewStats as ReviewStats}
+          currentCustomer={currentCustomer as any}
+          hasPurchased={hasPurchased}
+          alreadyReviewed={alreadyReviewed}
+        />
       </section>
 
       {/* ── Questions & Réponses ── */}
@@ -975,17 +1003,20 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
   );
 }
 
-function ReviewsSection({ productId, reviews, stats }: {
+function ReviewsSection({ productId, productSlug, reviews, stats, currentCustomer, hasPurchased, alreadyReviewed }: {
   productId: number;
+  productSlug: string;
   reviews: Review[];
   stats: ReviewStats;
+  currentCustomer: { email: string; name: string | null } | null;
+  hasPurchased: boolean;
+  alreadyReviewed: boolean;
 }) {
-  const [name, setName] = useState("");
   const [rating, setRating] = useState(0);
   const [body, setBody] = useState("");
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const [submitState, setSubmitState] = useState<"idle" | "loading" | "success" | "error">("idle");
+  const [submitState, setSubmitState] = useState<"idle" | "loading" | "success" | "error" | "pending">("idle");
 
   async function handlePhotoSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []).slice(0, 5 - photoUrls.length);
@@ -1010,16 +1041,17 @@ function ReviewsSection({ productId, reviews, stats }: {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!name.trim() || rating === 0) return;
+    if (rating === 0) return;
     setSubmitState("loading");
     try {
       const res = await fetch("/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId, customerName: name, rating, reviewBody: body, photos: photoUrls }),
+        body: JSON.stringify({ productId, rating, reviewBody: body, photos: photoUrls }),
       });
-      if (!res.ok) throw new Error();
-      setSubmitState("success");
+      const data = await res.json() as any;
+      if (!res.ok) { setSubmitState("error"); return; }
+      setSubmitState(data.verified ? "success" : "pending");
     } catch {
       setSubmitState("error");
     }
@@ -1037,7 +1069,6 @@ function ReviewsSection({ productId, reviews, stats }: {
         <div>
           {stats.count > 0 ? (
             <div className="flex items-start gap-6">
-              {/* Score */}
               <div className="text-center shrink-0">
                 <p className="font-serif text-6xl text-primary font-bold leading-none">{stats.avg.toFixed(1)}</p>
                 <div className="flex justify-center mt-1 mb-1">
@@ -1048,10 +1079,8 @@ function ReviewsSection({ productId, reviews, stats }: {
                     </span>
                   ))}
                 </div>
-                <p className="font-sans text-xs text-on-surface-variant">{stats.count} avis</p>
+                <p className="font-sans text-xs text-on-surface-variant">{stats.count} avis vérifiés</p>
               </div>
-
-              {/* Barres de distribution */}
               <div className="flex-1 space-y-1.5">
                 {[5,4,3,2,1].map(star => {
                   const count = stats.dist[star - 1];
@@ -1077,25 +1106,82 @@ function ReviewsSection({ productId, reviews, stats }: {
                 ))}
               </div>
               <p className="font-sans text-base text-on-surface font-semibold mb-1">Aucun avis pour le moment</p>
-              <p className="font-sans text-sm text-on-surface-variant">Partagez votre expérience avec ce produit</p>
+              <p className="font-sans text-sm text-on-surface-variant">Soyez la première à partager votre expérience</p>
             </div>
           )}
         </div>
 
-        {/* Formulaire */}
+        {/* Formulaire ou état selon la cliente */}
         <div>
           <p className="font-sans text-sm font-bold uppercase tracking-wider text-on-surface mb-4">Laisser un avis</p>
 
-          {submitState === "success" ? (
+          {/* Non connectée */}
+          {!currentCustomer && (
+            <div className="p-4 border border-outline-variant/40 bg-surface-container-low text-center">
+              <span className="material-symbols-outlined text-3xl text-on-surface-variant mb-2 block">lock</span>
+              <p className="font-sans text-sm font-semibold text-on-surface mb-1">Connexion requise</p>
+              <p className="font-sans text-xs text-on-surface-variant mb-4">
+                Seules les clientes ayant un compte peuvent laisser un avis.
+              </p>
+              <Link
+                to={`/compte/connexion?next=/boutique/${productSlug}#avis`}
+                className="inline-block px-5 py-2.5 bg-primary text-on-primary font-sans text-xs font-bold uppercase tracking-widest hover:opacity-90 transition-opacity">
+                Se connecter
+              </Link>
+            </div>
+          )}
+
+          {/* Connectée mais n'a pas acheté */}
+          {currentCustomer && !hasPurchased && !alreadyReviewed && (
+            <div className="p-4 border border-outline-variant/40 bg-surface-container-low">
+              <div className="flex items-start gap-3">
+                <span className="material-symbols-outlined text-xl text-on-surface-variant shrink-0 mt-0.5">shopping_bag</span>
+                <div>
+                  <p className="font-sans text-sm font-semibold text-on-surface mb-1">Achat requis</p>
+                  <p className="font-sans text-xs text-on-surface-variant leading-relaxed">
+                    Seules les clientes ayant acheté ce produit peuvent laisser un avis.
+                    Cela garantit l'authenticité de tous les avis.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Déjà un avis */}
+          {currentCustomer && alreadyReviewed && (
+            <div className="flex items-start gap-3 p-4 bg-secondary/10 border border-secondary/30">
+              <span className="material-symbols-outlined text-secondary text-xl shrink-0 mt-0.5">check_circle</span>
+              <div>
+                <p className="font-sans text-sm font-semibold text-on-surface">Votre avis a déjà été publié</p>
+                <p className="font-sans text-xs text-on-surface-variant">Merci pour votre retour !</p>
+              </div>
+            </div>
+          )}
+
+          {/* Succès après soumission */}
+          {(submitState === "success" || submitState === "pending") && (
             <div className="flex items-start gap-3 p-4 bg-secondary/10 border border-secondary/30">
               <span className="material-symbols-outlined text-secondary text-xl shrink-0 mt-0.5">check_circle</span>
               <div>
                 <p className="font-sans text-sm font-semibold text-on-surface">Merci pour votre avis !</p>
-                <p className="font-sans text-sm text-on-surface-variant">Il sera visible après validation par notre équipe.</p>
+                <p className="font-sans text-sm text-on-surface-variant">
+                  {submitState === "success"
+                    ? "Votre avis vérifié est maintenant visible."
+                    : "Il sera visible après validation par notre équipe."}
+                </p>
               </div>
             </div>
-          ) : (
+          )}
+
+          {/* Formulaire (connectée + a acheté + pas encore d'avis) */}
+          {currentCustomer && hasPurchased && !alreadyReviewed && submitState !== "success" && submitState !== "pending" && (
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Badge achat vérifié */}
+              <div className="flex items-center gap-1.5 text-xs text-secondary font-semibold">
+                <span className="material-symbols-outlined text-sm">verified</span>
+                Achat vérifié — {currentCustomer.name ?? currentCustomer.email.split("@")[0]}
+              </div>
+
               <div>
                 <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
                   Votre note *
@@ -1104,17 +1190,6 @@ function ReviewsSection({ productId, reviews, stats }: {
                 {rating > 0 && (
                   <p className="font-sans text-xs text-on-surface-variant mt-1">{STAR_LABELS[rating]}</p>
                 )}
-              </div>
-
-              <div>
-                <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
-                  Votre prénom *
-                </label>
-                <input
-                  type="text" required maxLength={100}
-                  value={name} onChange={e => setName(e.target.value)}
-                  placeholder="Ex : Marie"
-                  className="w-full h-10 px-3 border border-outline-variant bg-surface font-sans text-sm text-on-surface placeholder:text-on-surface-variant/50 focus:outline-none focus:border-primary transition-colors" />
               </div>
 
               <div>
@@ -1163,7 +1238,7 @@ function ReviewsSection({ productId, reviews, stats }: {
               )}
 
               <button type="submit"
-                disabled={submitState === "loading" || rating === 0 || !name.trim()}
+                disabled={submitState === "loading" || rating === 0}
                 className="px-6 py-2.5 bg-primary text-on-primary font-sans text-sm font-bold uppercase tracking-widest hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition-opacity">
                 {submitState === "loading" ? "Envoi…" : "Publier mon avis"}
               </button>
@@ -1175,7 +1250,7 @@ function ReviewsSection({ productId, reviews, stats }: {
       {/* Liste des avis */}
       {reviews.length > 0 && (
         <div className="space-y-0 divide-y divide-outline-variant/30 border-t border-outline-variant">
-          {reviews.map(r => (
+          {(reviews as any[]).map((r: any) => (
             <div key={r.id} className="py-6">
               <div className="flex items-start justify-between gap-4 mb-2">
                 <div className="flex items-center gap-3">
@@ -1185,7 +1260,15 @@ function ReviewsSection({ productId, reviews, stats }: {
                     </span>
                   </div>
                   <div>
-                    <p className="font-sans text-sm font-semibold text-on-surface">{r.customer_name}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="font-sans text-sm font-semibold text-on-surface">{r.customer_name}</p>
+                      {r.verified_purchase === 1 && (
+                        <span className="flex items-center gap-0.5 text-[10px] font-bold text-secondary">
+                          <span className="material-symbols-outlined text-xs">verified</span>
+                          Achat vérifié
+                        </span>
+                      )}
+                    </div>
                     <div className="flex">
                       {[1,2,3,4,5].map(s => (
                         <span key={s} className="material-symbols-outlined text-xs"
