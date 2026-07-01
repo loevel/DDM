@@ -60,8 +60,9 @@ const NAV = [
   { to: "/admin/promotions",   label: "Promotions",     icon: "sell" },
 
   { section: "Opérations" },
-  { to: "/admin/achats",       label: "Achats",         icon: "shopping_cart" },
-  { to: "/admin/stock",        label: "Stock",          icon: "warehouse" },
+  { to: "/admin/achats",         label: "Achats",         icon: "shopping_cart" },
+  { to: "/admin/stock",          label: "Stock",          icon: "warehouse" },
+  { to: "/admin/fournisseurs",   label: "Fournisseurs",   icon: "local_shipping" },
 
   { to: "/admin/cartes-cadeaux", label: "Cartes cadeaux", icon: "card_giftcard" },
 

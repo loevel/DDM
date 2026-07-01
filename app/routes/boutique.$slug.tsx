@@ -41,6 +41,7 @@ interface QAItem {
 
 interface LongueurVariant { slug: string; longueur_po: number; }
 interface CouleurVariant { slug: string; couleur: string; }
+interface ProductVariant { id: number; name: string; price_adjustment_cad: number; stock: number; }
 
 // ─── Loader ────────────────────────────────────────────────────────────────
 
@@ -114,6 +115,15 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     media = [{ type: "image", url: product.image_key, thumbnail_url: null, alt_text: null }];
   }
 
+  // Déclinaisons du produit (product_variants)
+  let productVariants: ProductVariant[] = [];
+  try {
+    const vRows = await db.prepare(
+      "SELECT id, name, price_adjustment_cad, stock FROM product_variants WHERE product_id = ? ORDER BY id ASC"
+    ).bind(product.id).all<ProductVariant>();
+    productVariants = vRows.results ?? [];
+  } catch { /* table pas encore créée */ }
+
   // Produits similaires (même famille, exclu l'actuel, max 4)
   const similaires = await getProducts(db, { famille: product.famille ?? undefined });
   const related = similaires.filter(p => p.id !== product.id).slice(0, 4);
@@ -137,7 +147,7 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     if (row) flash = { price: row.flash_price_cad, ends_at: row.ends_at };
   } catch { /* table pas encore créée */ }
 
-  return json({ product, media, related, longueurVars, couleurVars, reviews, reviewStats, flash, qa });
+  return json({ product, media, related, longueurVars, couleurVars, productVariants, reviews, reviewStats, flash, qa });
 }
 
 const BASE = "https://ddmwigs.com";
@@ -220,12 +230,15 @@ function FlashCountdown({ endsAt }: { endsAt: string }) {
 }
 
 export default function FicheProduit() {
-  const { product: p, media, related, longueurVars, couleurVars, reviews, reviewStats, flash, qa } = useLoaderData<typeof loader>();
+  const { product: p, media, related, longueurVars, couleurVars, productVariants, reviews, reviewStats, flash, qa } = useLoaderData<typeof loader>();
 
   const [qty, setQty] = useState(1);
   const [cartState, setCartState] = useState<"idle" | "loading" | "added" | "error">("idle");
   const [openSection, setOpenSection] = useState<string | null>("description");
   const [selectedDensity, setSelectedDensity] = useState<number>(p.densite ?? 150);
+  const [selectedVariantId, setSelectedVariantId] = useState<number | null>(
+    productVariants.length > 0 ? productVariants[0].id : null
+  );
   const [wishlist, setWishlist] = useState(false);
   const [wishlistLoaded, setWishlistLoaded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -233,7 +246,12 @@ export default function FicheProduit() {
   const [copyDone, setCopyDone] = useState(false);
   const ctaRef = useRef<HTMLDivElement>(null);
 
-  const displayPrice = flash ? flash.price : p.price_cad;
+  const selectedVariant = productVariants.find(v => v.id === selectedVariantId) ?? null;
+  const variantPriceAdj = selectedVariant?.price_adjustment_cad ?? 0;
+  const effectiveStock = selectedVariant ? selectedVariant.stock : p.stock;
+
+  const basePrice = flash ? flash.price : p.price_cad;
+  const displayPrice = basePrice + variantPriceAdj;
   const originalPrice = flash ? p.price_cad : (p.compare_at_price_cad ?? null);
   const discount = originalPrice && originalPrice > displayPrice
     ? Math.round((1 - displayPrice / originalPrice) * 100)
@@ -285,14 +303,20 @@ export default function FicheProduit() {
 
   async function addToCart() {
     if (cartState === "loading") return;
+    if (productVariants.length > 0 && !selectedVariantId) return;
     setCartState("loading");
     try {
       let cartId = localStorage.getItem("ddm_cart_id");
       if (!cartId) { cartId = crypto.randomUUID(); localStorage.setItem("ddm_cart_id", cartId); }
+      const body: Record<string, unknown> = { productId: p.id, quantity: qty };
+      if (selectedVariantId && selectedVariant) {
+        body.variantId = selectedVariantId;
+        body.variantName = selectedVariant.name;
+      }
       const res = await fetch(`/api/cart?cartId=${cartId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ productId: p.id, quantity: qty }),
+        body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`Erreur ${res.status}`);
       const cart = await res.json() as { items: { quantity: number }[] };
@@ -629,6 +653,38 @@ export default function FicheProduit() {
             </div>
           )}
 
+          {/* ── Sélecteur de déclinaisons (product_variants) ── */}
+          {productVariants.length > 0 && (
+            <div className="mb-5">
+              <p className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant mb-2.5">
+                Déclinaison —{" "}
+                <span className="text-on-surface normal-case font-semibold tracking-normal">
+                  {selectedVariant?.name ?? "Choisir une option"}
+                </span>
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {productVariants.map(v => (
+                  <button key={v.id} onClick={() => setSelectedVariantId(v.id)}
+                    disabled={v.stock === 0}
+                    className={`px-3 py-1.5 font-sans text-xs font-semibold border transition-all ${
+                      v.stock === 0
+                        ? "border-outline-variant/30 text-on-surface-variant/40 cursor-not-allowed line-through"
+                        : v.id === selectedVariantId
+                          ? "border-primary bg-primary text-on-primary"
+                          : "border-outline-variant text-on-surface hover:border-primary hover:text-primary"
+                    }`}>
+                    {v.name}
+                    {v.price_adjustment_cad !== 0 && (
+                      <span className="ml-1 opacity-70">
+                        ({v.price_adjustment_cad > 0 ? "+" : ""}{v.price_adjustment_cad.toFixed(0)} $)
+                      </span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── Sélecteur de densité ── */}
           {showDensityPicker && (
             <div className="mb-5">
@@ -676,10 +732,10 @@ export default function FicheProduit() {
           )}
 
           {/* Stock */}
-          {p.stock > 0 && p.stock <= 5 && (
+          {effectiveStock > 0 && effectiveStock <= 5 && (
             <div className="flex items-center gap-2 mb-4 font-sans text-sm text-error font-semibold">
               <span className="material-symbols-outlined text-sm">warning</span>
-              Plus que {p.stock} en stock — commandez vite !
+              Plus que {effectiveStock} en stock — commandez vite !
             </div>
           )}
 
@@ -691,19 +747,19 @@ export default function FicheProduit() {
                 <span className="material-symbols-outlined text-lg">remove</span>
               </button>
               <span className="w-10 text-center font-sans text-sm font-semibold text-on-surface">{qty}</span>
-              <button onClick={() => setQty(q => Math.min(p.stock || 10, q + 1))}
+              <button onClick={() => setQty(q => Math.min(effectiveStock || 10, q + 1))}
                 className="w-10 h-12 flex items-center justify-center text-on-surface-variant hover:text-primary transition-colors">
                 <span className="material-symbols-outlined text-lg">add</span>
               </button>
             </div>
 
             <button onClick={addToCart}
-              disabled={p.stock === 0 || cartState === "loading"}
+              disabled={effectiveStock === 0 || cartState === "loading" || (productVariants.length > 0 && !selectedVariantId)}
               className={`flex-1 h-12 flex items-center justify-center gap-2 font-sans text-sm font-bold uppercase tracking-widest transition-all duration-300 ${
                 cartState === "added" ? "bg-secondary text-on-secondary"
                   : cartState === "error" ? "bg-error text-on-error"
                   : cartState === "loading" ? "bg-primary/70 text-on-primary cursor-wait"
-                  : p.stock === 0 ? "bg-surface-container text-on-surface-variant cursor-not-allowed"
+                  : effectiveStock === 0 ? "bg-surface-container text-on-surface-variant cursor-not-allowed"
                   : "bg-primary text-on-primary hover:opacity-90 active:scale-[0.98]"
               }`}>
               <span className="material-symbols-outlined text-lg">
@@ -712,7 +768,7 @@ export default function FicheProduit() {
               {cartState === "added" ? "Ajouté au panier !"
                 : cartState === "error" ? "Erreur — réessayez"
                 : cartState === "loading" ? "Ajout en cours…"
-                : p.stock === 0 ? "Rupture de stock"
+                : effectiveStock === 0 ? "Rupture de stock"
                 : "Ajouter au panier"}
             </button>
           </div>

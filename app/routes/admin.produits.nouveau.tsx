@@ -1,10 +1,16 @@
-import { redirect } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, MetaFunction } from "@remix-run/react";
-import { Form, Link, useActionData, useNavigation } from "@remix-run/react";
+import { json, redirect } from "@remix-run/cloudflare";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState, useRef } from "react";
 import { cfImage } from "~/lib/images";
 
 export const meta: MetaFunction = () => [{ title: "Nouveau produit — Admin DDM" }];
+
+export async function loader({ context }: LoaderFunctionArgs) {
+  const db = context.cloudflare.env.DB;
+  const { results } = await db.prepare("SELECT id, nom FROM fournisseurs ORDER BY nom ASC").all<{ id: number; nom: string }>().catch(() => ({ results: [] }));
+  return json({ fournisseurs: results ?? [] });
+}
 
 // ─── Type médias ──────────────────────────────────────────────────────────────
 
@@ -49,7 +55,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         hd_lace, glueless, pret_a_porter, quantite_meches,
         stock, image_key, featured,
         prix_achat_usd, frais_expedition_usd, frais_douane_pct,
-        fournisseur, ref_fournisseur, url_fournisseur, contact_fournisseur,
+        fournisseur_id, ref_fournisseur,
         delai_livraison_jours, pays_fabrication,
         date_derniere_commande, date_prochain_reapprovisionnement,
         qualite_cheveux, origine_cheveux, cap_size, nb_combs,
@@ -57,7 +63,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
         meta_title, meta_description, tags, notes_internes
       ) VALUES (
         ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,
-        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
+        ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?
       )
     `).bind(
       slug, g("name"), g("description") || null,
@@ -72,8 +78,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       n("quantite_meches"),
       Number(g("stock") || 0), firstImageUrl, b("featured"),
       n("prix_achat_usd"), n("frais_expedition_usd"), n("frais_douane_pct") ?? 0,
-      g("fournisseur") || null, g("ref_fournisseur") || null,
-      g("url_fournisseur") || null, g("contact_fournisseur") || null,
+      n("fournisseur_id"), g("ref_fournisseur") || null,
       n("delai_livraison_jours"), g("pays_fabrication") || "Chine",
       g("date_derniere_commande") || null, g("date_prochain_reapprovisionnement") || null,
       g("qualite_cheveux") || null, g("origine_cheveux") || null,
@@ -99,12 +104,29 @@ export async function action({ request, context }: ActionFunctionArgs) {
     ).bind(productId, m.type, m.url, m.thumbnail_url || null, m.alt_text || null, i).run();
   }
 
+  // Insérer les variantes et synchroniser le stock produit
+  type VariantInput = { name: string; stock: number; price_adjustment_cad: number; sku?: string };
+  let variants: VariantInput[] = [];
+  try { variants = JSON.parse(g("variants_json") || "[]"); } catch { variants = []; }
+  if (variants.length > 0) {
+    let totalStock = 0;
+    for (const v of variants) {
+      if (!v.name) continue;
+      await db.prepare(
+        "INSERT INTO product_variants (product_id, name, price_adjustment_cad, stock, sku) VALUES (?,?,?,?,?)"
+      ).bind(productId, v.name, v.price_adjustment_cad ?? 0, v.stock ?? 0, v.sku || null).run();
+      totalStock += Number(v.stock ?? 0);
+    }
+    await db.prepare("UPDATE products SET stock = ? WHERE id = ?").bind(totalStock, productId).run();
+  }
+
   throw redirect("/admin/produits");
 }
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function NouveauProduit() {
+  const { fournisseurs } = useLoaderData<typeof loader>();
   const data = useActionData<typeof action>();
   const nav = useNavigation();
 
@@ -122,7 +144,8 @@ export default function NouveauProduit() {
       )}
 
       <Form method="post" className="space-y-6">
-        <ProduitFormFields />
+        <ProduitFormFields fournisseurs={fournisseurs} />
+        <VariantsEditor />
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={nav.state === "submitting"}
             className="bg-primary text-on-primary px-6 py-2.5 text-sm font-semibold uppercase tracking-wider hover:opacity-90 disabled:opacity-60">
@@ -503,7 +526,7 @@ function MediaGalleryWidget({ defaultMedia }: { defaultMedia?: MediaItem[] }) {
 
 // ─── Champs du formulaire partagé ─────────────────────────────────────────────
 
-export function ProduitFormFields({ defaults }: { defaults?: Record<string, any> }) {
+export function ProduitFormFields({ defaults, fournisseurs = [] }: { defaults?: Record<string, any>; fournisseurs?: { id: number; nom: string }[] }) {
   const [prixVente, setPrixVente] = useState(defaults?.price_cad ?? "");
   const [prixAchat, setPrixAchat] = useState(defaults?.prix_achat_usd ?? "");
   const [fraisExp, setFraisExp] = useState(defaults?.frais_expedition_usd ?? "");
@@ -639,25 +662,34 @@ export function ProduitFormFields({ defaults }: { defaults?: Record<string, any>
       {/* ── 4. Fournisseur ── */}
       <Section title="Fournisseur" icon="local_shipping">
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <Label>Nom du fournisseur</Label>
-            <input name="fournisseur" defaultValue={defaults?.fournisseur}
-              placeholder="ex: Alibaba Hair Co." className={inp} />
+          <div className="col-span-2">
+            <div className="flex items-center justify-between mb-1.5">
+              <Label>Fournisseur</Label>
+              <a href="/admin/fournisseurs" target="_blank"
+                className="text-xs text-primary hover:underline flex items-center gap-0.5">
+                <span className="material-symbols-outlined text-[13px]">open_in_new</span>
+                Gérer les fournisseurs
+              </a>
+            </div>
+            {fournisseurs.length === 0 ? (
+              <div className="flex items-center gap-2 text-sm text-on-surface-variant border border-outline-variant/50 px-3 py-2">
+                <span className="material-symbols-outlined text-sm">info</span>
+                Aucun fournisseur enregistré —{" "}
+                <a href="/admin/fournisseurs" target="_blank" className="text-primary underline">créer un fournisseur</a>
+              </div>
+            ) : (
+              <select name="fournisseur_id" defaultValue={defaults?.fournisseur_id ?? ""} className={inp}>
+                <option value="">— Sélectionner un fournisseur —</option>
+                {fournisseurs.map(f => (
+                  <option key={f.id} value={f.id}>{f.nom}</option>
+                ))}
+              </select>
+            )}
           </div>
           <div>
-            <Label>Référence produit fournisseur</Label>
+            <Label>Référence produit chez le fournisseur</Label>
             <input name="ref_fournisseur" defaultValue={defaults?.ref_fournisseur}
               placeholder="ex: SKU-HC-2024-B" className={inp} />
-          </div>
-          <div className="col-span-2">
-            <Label>URL produit fournisseur</Label>
-            <input name="url_fournisseur" type="url" defaultValue={defaults?.url_fournisseur}
-              placeholder="https://..." className={inp} />
-          </div>
-          <div>
-            <Label>Contact fournisseur</Label>
-            <input name="contact_fournisseur" defaultValue={defaults?.contact_fournisseur}
-              placeholder="WhatsApp, email, WeChat…" className={inp} />
           </div>
           <div>
             <Label>Délai de livraison (jours)</Label>
@@ -868,6 +900,104 @@ export function ProduitFormFields({ defaults }: { defaults?: Record<string, any>
       </Section>
 
     </div>
+  );
+}
+
+// ─── Éditeur de variantes ─────────────────────────────────────────────────────
+
+export type VariantRow = { name: string; stock: number; price_adjustment_cad: number; sku: string };
+
+export function VariantsEditor({ initialVariants = [] }: { initialVariants?: VariantRow[] }) {
+  const [variants, setVariants] = useState<VariantRow[]>(initialVariants);
+
+  function add() {
+    setVariants(v => [...v, { name: "", stock: 0, price_adjustment_cad: 0, sku: "" }]);
+  }
+
+  function remove(i: number) {
+    setVariants(v => v.filter((_, idx) => idx !== i));
+  }
+
+  function update(i: number, field: keyof VariantRow, value: string | number) {
+    setVariants(v => v.map((row, idx) => idx === i ? { ...row, [field]: value } : row));
+  }
+
+  return (
+    <Section title="Déclinaisons (optionnel)" icon="tune"
+      subtitle="Ajoutez des variantes si ce produit existe en plusieurs couleurs, longueurs ou options. Laissez vide si le produit n'a qu'une seule version.">
+      <input type="hidden" name="variants_json" value={JSON.stringify(variants)} />
+
+      {variants.length > 0 && (
+        <div className="mb-4 overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-outline-variant/30">
+                <th className="text-left pb-2 pr-3 text-xs font-semibold text-on-surface-variant uppercase tracking-wider">Nom de la déclinaison *</th>
+                <th className="text-left pb-2 pr-3 text-xs font-semibold text-on-surface-variant uppercase tracking-wider w-24">Stock</th>
+                <th className="text-left pb-2 pr-3 text-xs font-semibold text-on-surface-variant uppercase tracking-wider w-32">Ajust. prix $</th>
+                <th className="text-left pb-2 pr-3 text-xs font-semibold text-on-surface-variant uppercase tracking-wider w-32">SKU variante</th>
+                <th className="w-8" />
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-outline-variant/10">
+              {variants.map((v, i) => (
+                <tr key={i}>
+                  <td className="py-2 pr-3">
+                    <input
+                      value={v.name}
+                      onChange={e => update(i, "name", e.target.value)}
+                      placeholder="ex: Noir / 14 po · Brun / 18 po"
+                      className="w-full border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:outline-none focus:border-primary"
+                    />
+                  </td>
+                  <td className="py-2 pr-3">
+                    <input
+                      type="number" min="0" value={v.stock}
+                      onChange={e => update(i, "stock", Number(e.target.value))}
+                      className="w-full border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:outline-none focus:border-primary"
+                    />
+                  </td>
+                  <td className="py-2 pr-3">
+                    <input
+                      type="number" step="0.01" value={v.price_adjustment_cad}
+                      onChange={e => update(i, "price_adjustment_cad", Number(e.target.value))}
+                      placeholder="0.00"
+                      className="w-full border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:outline-none focus:border-primary"
+                    />
+                  </td>
+                  <td className="py-2 pr-3">
+                    <input
+                      value={v.sku}
+                      onChange={e => update(i, "sku", e.target.value)}
+                      placeholder="optionnel"
+                      className="w-full border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:outline-none focus:border-primary"
+                    />
+                  </td>
+                  <td className="py-2">
+                    <button type="button" onClick={() => remove(i)}
+                      className="text-on-surface-variant hover:text-error transition-colors">
+                      <span className="material-symbols-outlined text-lg">delete</span>
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <button type="button" onClick={add}
+        className="flex items-center gap-1.5 text-sm border border-outline-variant text-on-surface-variant px-3 py-2 hover:border-primary hover:text-primary transition-colors">
+        <span className="material-symbols-outlined text-base">add</span>
+        Ajouter une déclinaison
+      </button>
+
+      {variants.length > 0 && (
+        <p className="text-xs text-on-surface-variant mt-3">
+          Le stock du produit sera calculé automatiquement comme la somme des stocks de ses déclinaisons.
+        </p>
+      )}
+    </Section>
   );
 }
 

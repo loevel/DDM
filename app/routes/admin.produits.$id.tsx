@@ -2,20 +2,23 @@ import { json, redirect } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
 import { Form, Link, useActionData, useFetcher, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
-import { ProduitFormFields } from "./admin.produits.nouveau";
-import type { MediaItem } from "./admin.produits.nouveau";
+import { ProduitFormFields, VariantsEditor } from "./admin.produits.nouveau";
+import type { MediaItem, VariantRow } from "./admin.produits.nouveau";
 
 export const meta: MetaFunction = () => [{ title: "Modifier produit — Admin DDM" }];
 
 export async function loader({ params, context }: LoaderFunctionArgs) {
   const db = context.cloudflare.env.DB;
 
-  const [product, allCollections, productCollections, media] = await Promise.all([
+  const [product, allCollections, productCollections, media, variantsResult, fournisseursResult] = await Promise.all([
     db.prepare("SELECT * FROM products WHERE id = ?").bind(params.id).first(),
     db.prepare("SELECT id, name FROM collections WHERE active = 1 ORDER BY position ASC, id ASC").all(),
     db.prepare("SELECT collection_id FROM product_collections WHERE product_id = ?").bind(params.id).all(),
     db.prepare("SELECT type, url, thumbnail_url, alt_text FROM product_media WHERE product_id = ? ORDER BY position ASC")
       .bind(params.id).all<MediaItem>(),
+    db.prepare("SELECT id, name, price_adjustment_cad, stock, sku FROM product_variants WHERE product_id = ? ORDER BY id ASC")
+      .bind(params.id).all<VariantRow & { id: number }>().catch(() => ({ results: [] })),
+    db.prepare("SELECT id, nom FROM fournisseurs ORDER BY nom ASC").all<{ id: number; nom: string }>().catch(() => ({ results: [] })),
   ]);
 
   if (!product) throw new Response("Produit introuvable", { status: 404 });
@@ -27,6 +30,8 @@ export async function loader({ params, context }: LoaderFunctionArgs) {
     allCollections: allCollections.results ?? [],
     assignedIds: [...assignedIds],
     media: media.results ?? [],
+    variants: (variantsResult.results ?? []) as (VariantRow & { id: number })[],
+    fournisseurs: (fournisseursResult.results ?? []) as { id: number; nom: string }[],
   });
 }
 
@@ -66,7 +71,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
       hd_lace=?, glueless=?, pret_a_porter=?, quantite_meches=?,
       stock=?, image_key=?, featured=?,
       prix_achat_usd=?, frais_expedition_usd=?, frais_douane_pct=?,
-      fournisseur=?, ref_fournisseur=?, url_fournisseur=?, contact_fournisseur=?,
+      fournisseur_id=?, ref_fournisseur=?,
       delai_livraison_jours=?, pays_fabrication=?,
       date_derniere_commande=?, date_prochain_reapprovisionnement=?,
       qualite_cheveux=?, origine_cheveux=?, cap_size=?, nb_combs=?,
@@ -84,8 +89,7 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
     b("hd_lace"), b("glueless"), b("pret_a_porter"), n("quantite_meches"),
     Number(g("stock") || 0), firstImageUrl, b("featured"),
     n("prix_achat_usd"), n("frais_expedition_usd"), n("frais_douane_pct") ?? 0,
-    g("fournisseur") || null, g("ref_fournisseur") || null,
-    g("url_fournisseur") || null, g("contact_fournisseur") || null,
+    n("fournisseur_id"), g("ref_fournisseur") || null,
     n("delai_livraison_jours"), g("pays_fabrication") || "Chine",
     g("date_derniere_commande") || null, g("date_prochain_reapprovisionnement") || null,
     g("qualite_cheveux") || null, g("origine_cheveux") || null,
@@ -104,6 +108,23 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
     await db.prepare(
       "INSERT INTO product_media (product_id, type, url, thumbnail_url, alt_text, position) VALUES (?,?,?,?,?,?)"
     ).bind(params.id, m.type, m.url, m.thumbnail_url || null, m.alt_text || null, i).run();
+  }
+
+  // Remplacer toutes les variantes et synchroniser le stock produit
+  type VariantInput = { name: string; stock: number; price_adjustment_cad: number; sku?: string };
+  let variants: VariantInput[] = [];
+  try { variants = JSON.parse(g("variants_json") || "[]"); } catch { variants = []; }
+  await db.prepare("DELETE FROM product_variants WHERE product_id = ?").bind(params.id).run();
+  let totalVariantStock = 0;
+  for (const v of variants) {
+    if (!v.name) continue;
+    await db.prepare(
+      "INSERT INTO product_variants (product_id, name, price_adjustment_cad, stock, sku) VALUES (?,?,?,?,?)"
+    ).bind(params.id, v.name, v.price_adjustment_cad ?? 0, v.stock ?? 0, v.sku || null).run();
+    totalVariantStock += Number(v.stock ?? 0);
+  }
+  if (variants.length > 0) {
+    await db.prepare("UPDATE products SET stock = ? WHERE id = ?").bind(totalVariantStock, params.id).run();
   }
 
   throw redirect("/admin/produits");
@@ -180,12 +201,12 @@ function CollectionsPanel({
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function EditProduit() {
-  const { product, allCollections, assignedIds, media } = useLoaderData<typeof loader>();
+  const { product, allCollections, assignedIds, media, variants, fournisseurs } = useLoaderData<typeof loader>();
   const data = useActionData<typeof action>();
   const nav = useNavigation();
 
-  // Injecter les médias existants dans les defaults du formulaire
   const defaults = { ...(product as any), media };
+  const initialVariants = (variants as VariantRow[]) ?? [];
 
   return (
     <div className="p-8 max-w-4xl">
@@ -202,7 +223,8 @@ export default function EditProduit() {
 
       <Form method="post" className="space-y-6">
         <input type="hidden" name="intent" value="update_product" />
-        <ProduitFormFields defaults={defaults} />
+        <ProduitFormFields defaults={defaults} fournisseurs={fournisseurs as any} />
+        <VariantsEditor initialVariants={initialVariants} />
         <div className="flex gap-3 pt-2">
           <button type="submit" disabled={nav.state === "submitting"}
             className="bg-primary text-on-primary px-6 py-2.5 text-sm font-semibold uppercase tracking-wider hover:opacity-90 disabled:opacity-60">

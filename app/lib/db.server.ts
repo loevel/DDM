@@ -79,12 +79,23 @@ export interface Product {
 }
 
 
+export interface ProductVariant {
+  id: number;
+  product_id: number;
+  name: string;
+  price_adjustment_cad: number;
+  stock: number;
+  sku: string | null;
+}
+
 export interface CartItem {
   productId: number;
   name: string;
   price_cad: number;
   slug: string;
   quantity: number;
+  variantId?: number;
+  variantName?: string;
 }
 
 export interface Cart {

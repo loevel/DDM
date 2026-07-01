@@ -50,12 +50,26 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
       if (paidOrder) {
         const { results: items } = await db
-          .prepare("SELECT product_id, quantity, unit_price_cad FROM order_items WHERE order_id = ?")
+          .prepare("SELECT product_id, quantity, unit_price_cad, variant_id FROM order_items WHERE order_id = ?")
           .bind(paidOrder.id)
-          .all<{ product_id: number; quantity: number; unit_price_cad: number }>();
+          .all<{ product_id: number; quantity: number; unit_price_cad: number; variant_id: number | null }>();
 
         for (const item of items ?? []) {
           if (!item.product_id) continue;
+
+          // Décrémenter le stock de la variante si applicable
+          if (item.variant_id) {
+            const variant = await db
+              .prepare("SELECT stock FROM product_variants WHERE id = ?")
+              .bind(item.variant_id)
+              .first<{ stock: number }>();
+            if (variant) {
+              const newVStock = Math.max(0, variant.stock - item.quantity);
+              await db.prepare("UPDATE product_variants SET stock = ? WHERE id = ?")
+                .bind(newVStock, item.variant_id).run();
+            }
+          }
+
           const product = await db
             .prepare("SELECT stock FROM products WHERE id = ?")
             .bind(item.product_id)

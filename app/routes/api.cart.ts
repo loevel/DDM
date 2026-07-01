@@ -16,22 +16,57 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const cartId = new URL(request.url).searchParams.get("cartId");
   if (!cartId) return Response.json({ error: "cartId requis" }, { status: 400 });
 
-  const { productId, quantity } = await request.json<{ productId: number; quantity: number }>();
+  const { productId, quantity, variantId, variantName } = await request.json<{
+    productId: number;
+    quantity: number;
+    variantId?: number;
+    variantName?: string;
+  }>();
+
   const [cache, db] = [getCache(context), getDB(context)];
 
   const raw = await cache.get(cartKey(cartId));
   const cart: Cart = raw ? JSON.parse(raw) : { items: [], total: 0 };
 
-  const product = await db.prepare("SELECT id, name, price_cad, slug FROM products WHERE id = ?").bind(productId).first<{ id: number; name: string; price_cad: number; slug: string }>();
+  const product = await db
+    .prepare("SELECT id, name, price_cad, slug FROM products WHERE id = ?")
+    .bind(productId)
+    .first<{ id: number; name: string; price_cad: number; slug: string }>();
   if (!product) return Response.json({ error: "Produit introuvable" }, { status: 404 });
 
-  const idx = cart.items.findIndex((i: CartItem) => i.productId === productId);
+  // Si une variante est demandée, vérifier son stock et ajuster le prix
+  let effectivePrice = product.price_cad;
+  if (variantId) {
+    const variant = await db
+      .prepare("SELECT id, stock, price_adjustment_cad FROM product_variants WHERE id = ? AND product_id = ?")
+      .bind(variantId, productId)
+      .first<{ id: number; stock: number; price_adjustment_cad: number }>();
+    if (!variant) return Response.json({ error: "Déclinaison introuvable" }, { status: 404 });
+    if (quantity > 0 && variant.stock < quantity) {
+      return Response.json({ error: "Stock insuffisant pour cette déclinaison" }, { status: 400 });
+    }
+    effectivePrice = product.price_cad + variant.price_adjustment_cad;
+  }
+
+  // Trouver l'item existant (même produit + même variante)
+  const idx = cart.items.findIndex(
+    (i: CartItem) => i.productId === productId && (i.variantId ?? null) === (variantId ?? null)
+  );
+
   if (quantity <= 0) {
     if (idx !== -1) cart.items.splice(idx, 1);
   } else if (idx !== -1) {
     cart.items[idx].quantity = quantity;
+    cart.items[idx].price_cad = effectivePrice;
   } else {
-    cart.items.push({ productId, name: product.name, price_cad: product.price_cad, slug: product.slug, quantity });
+    cart.items.push({
+      productId,
+      name: product.name,
+      price_cad: effectivePrice,
+      slug: product.slug,
+      quantity,
+      ...(variantId ? { variantId, variantName } : {}),
+    });
   }
 
   cart.total = cart.items.reduce((s: number, i: CartItem) => s + i.price_cad * i.quantity, 0);

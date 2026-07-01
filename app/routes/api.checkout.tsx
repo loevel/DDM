@@ -40,13 +40,13 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const cartRaw = await cache.get(`cart:${cartId}`);
   if (!cartRaw) return json({ error: "Panier introuvable ou expiré." }, { status: 404 });
 
-  const cart = JSON.parse(cartRaw) as { items: { productId: number; name: string; price_cad: number; slug: string; quantity: number }[]; total: number };
+  const cart = JSON.parse(cartRaw) as { items: { productId: number; name: string; price_cad: number; slug: string; quantity: number; variantId?: number; variantName?: string }[]; total: number };
 
   if (!cart.items.length) return json({ error: "Panier vide." }, { status: 400 });
 
   // Vérifier les prix en DB (sécurité : ne pas faire confiance au client)
   let subtotal = 0;
-  const verifiedItems: { productId: number; name: string; price_cad: number; slug: string; quantity: number; image_key: string | null }[] = [];
+  const verifiedItems: { productId: number; name: string; price_cad: number; slug: string; quantity: number; image_key: string | null; variantId?: number; variantName?: string }[] = [];
 
   for (const item of cart.items) {
     const product = await db
@@ -55,10 +55,31 @@ export async function action({ request, context }: ActionFunctionArgs) {
       .first<{ id: number; name: string; price_cad: number; slug: string; image_key: string | null; stock: number }>();
 
     if (!product) return json({ error: `Produit introuvable : ${item.name}` }, { status: 400 });
-    if (product.stock < item.quantity) return json({ error: `Stock insuffisant pour : ${product.name}` }, { status: 400 });
 
-    subtotal += product.price_cad * item.quantity;
-    verifiedItems.push({ ...item, name: product.name, price_cad: product.price_cad, slug: product.slug, image_key: product.image_key });
+    let effectivePrice = product.price_cad;
+
+    if (item.variantId) {
+      const variant = await db
+        .prepare("SELECT id, stock, price_adjustment_cad FROM product_variants WHERE id = ? AND product_id = ?")
+        .bind(item.variantId, item.productId)
+        .first<{ id: number; stock: number; price_adjustment_cad: number }>();
+      if (!variant) return json({ error: `Déclinaison introuvable : ${item.variantName}` }, { status: 400 });
+      if (variant.stock < item.quantity) return json({ error: `Stock insuffisant pour : ${product.name} — ${item.variantName}` }, { status: 400 });
+      effectivePrice = product.price_cad + variant.price_adjustment_cad;
+    } else {
+      if (product.stock < item.quantity) return json({ error: `Stock insuffisant pour : ${product.name}` }, { status: 400 });
+    }
+
+    subtotal += effectivePrice * item.quantity;
+    verifiedItems.push({
+      ...item,
+      name: product.name,
+      price_cad: effectivePrice,
+      slug: product.slug,
+      image_key: product.image_key,
+      variantId: item.variantId,
+      variantName: item.variantName,
+    });
   }
 
   // Appliquer le code promo si fourni
@@ -135,9 +156,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
   for (const item of verifiedItems) {
     await db
       .prepare(`INSERT INTO order_items
-        (order_id, product_id, product_name, product_slug, image_key, quantity, unit_price_cad)
-        VALUES (?,?,?,?,?,?,?)`)
-      .bind(order.id, item.productId, item.name, item.slug, item.image_key, item.quantity, item.price_cad)
+        (order_id, product_id, product_name, product_slug, image_key, quantity, unit_price_cad, variant_id, variant_name)
+        VALUES (?,?,?,?,?,?,?,?,?)`)
+      .bind(order.id, item.productId, item.name, item.slug, item.image_key, item.quantity, item.price_cad, item.variantId ?? null, item.variantName ?? null)
       .run();
   }
 

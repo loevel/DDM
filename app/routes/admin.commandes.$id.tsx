@@ -233,7 +233,12 @@ export default function CommandeDetail() {
                       </div>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-on-surface">{it.product_name ?? `Produit #${it.product_id}`}</td>
+                  <td className="px-3 py-3 text-on-surface">
+                    {it.product_name ?? `Produit #${it.product_id}`}
+                    {it.variant_name && (
+                      <span className="block text-xs text-on-surface-variant mt-0.5">{it.variant_name}</span>
+                    )}
+                  </td>
                   <td className="px-3 py-3 text-on-surface-variant">{it.quantity ?? 1}</td>
                   <td className="px-3 py-3 text-on-surface-variant">{Number(it.unit_price_cad).toFixed(2)} $</td>
                   <td className="px-3 py-3 font-semibold text-on-surface">{(Number(it.unit_price_cad) * Number(it.quantity ?? 1)).toFixed(2)} $</td>
