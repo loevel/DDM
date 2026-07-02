@@ -13,7 +13,16 @@ export const meta: MetaFunction = () => [
 export async function loader({ context }: LoaderFunctionArgs) {
   const env = context.cloudflare.env;
   const publishableKey = (env.STRIPE_PUBLISHABLE_KEY as string | undefined) ?? "";
-  return json({ publishableKey });
+
+  let deliveryDelay = "3 à 7 jours ouvrables";
+  try {
+    const row = await env.DB
+      .prepare("SELECT value FROM site_settings WHERE key = 'delivery_delay'")
+      .first<{ value: string }>();
+    if (row?.value) deliveryDelay = row.value;
+  } catch { /* valeur par défaut */ }
+
+  return json({ publishableKey, deliveryDelay });
 }
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -42,10 +51,17 @@ interface CustomerInfo {
   postal_code: string;
 }
 
+interface Breakdown {
+  subtotal: number;
+  discount: number;
+  taxes: { label: string; amount: number }[];
+  total: number;
+}
+
 // ─── Page principale ──────────────────────────────────────────────────────────
 
 export default function Checkout() {
-  const { publishableKey } = useLoaderData<typeof loader>();
+  const { publishableKey, deliveryDelay } = useLoaderData<typeof loader>();
 
   const [cart, setCart] = useState<Cart>({ items: [], total: 0 });
   const [cartId, setCartId] = useState<string | null>(null);
@@ -63,6 +79,7 @@ export default function Checkout() {
   });
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [orderRef, setOrderRef] = useState<string | null>(null);
+  const [breakdown, setBreakdown] = useState<Breakdown | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -95,7 +112,8 @@ export default function Checkout() {
       }).catch(() => {});
   }, []);
 
-  const finalTotal = cart.total;
+  // Le total facturé vient du serveur (remise + taxes) dès l'étape paiement
+  const finalTotal = breakdown?.total ?? cart.total;
   const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
   // Passer à l'étape paiement : créer le PaymentIntent
@@ -119,10 +137,11 @@ export default function Checkout() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ cartId, customerInfo, promoCode: promoCode || undefined, referralCode: referralCode || undefined }),
       });
-      const data = await res.json() as { clientSecret?: string; orderRef?: string; error?: string };
+      const data = await res.json() as { clientSecret?: string; orderRef?: string; breakdown?: Breakdown; error?: string };
       if (!res.ok || !data.clientSecret) throw new Error(data.error ?? "Erreur serveur.");
       setClientSecret(data.clientSecret);
       setOrderRef(data.orderRef ?? null);
+      setBreakdown(data.breakdown ?? null);
       setStep("payment");
     } catch (err: any) {
       setError(err.message ?? "Une erreur est survenue.");
@@ -221,7 +240,7 @@ export default function Checkout() {
           </div>
 
           {/* Récap commande */}
-          <OrderSummary cart={cart} />
+          <OrderSummary cart={cart} breakdown={breakdown} deliveryDelay={deliveryDelay} />
         </div>
       )}
     </main>
@@ -459,7 +478,7 @@ function ConfirmationStep({ orderRef }: { orderRef: string | null }) {
 
 // ─── Récap commande ───────────────────────────────────────────────────────────
 
-function OrderSummary({ cart }: { cart: Cart }) {
+function OrderSummary({ cart, breakdown, deliveryDelay }: { cart: Cart; breakdown: Breakdown | null; deliveryDelay: string }) {
   return (
     <div className="bg-surface-container-low border border-outline-variant/40 p-6 h-fit lg:sticky lg:top-24">
       <h2 className="font-sans text-sm font-bold uppercase tracking-wider text-on-surface mb-5">
@@ -493,17 +512,40 @@ function OrderSummary({ cart }: { cart: Cart }) {
       <div className="border-t border-outline-variant pt-4 space-y-2">
         <div className="flex justify-between font-sans text-sm text-on-surface-variant">
           <span>Sous-total</span>
-          <span>{cart.total.toFixed(2)} $ CAD</span>
+          <span>{(breakdown?.subtotal ?? cart.total).toFixed(2)} $ CAD</span>
         </div>
+        {breakdown && breakdown.discount > 0 && (
+          <div className="flex justify-between font-sans text-sm text-secondary font-semibold">
+            <span>Remise</span>
+            <span>−{breakdown.discount.toFixed(2)} $ CAD</span>
+          </div>
+        )}
         <div className="flex justify-between font-sans text-sm text-on-surface-variant">
           <span>Livraison</span>
           <span className="text-secondary font-semibold">Gratuite</span>
         </div>
+        {breakdown?.taxes.map(t => (
+          <div key={t.label} className="flex justify-between font-sans text-sm text-on-surface-variant">
+            <span>{t.label}</span>
+            <span>{t.amount.toFixed(2)} $ CAD</span>
+          </div>
+        ))}
         <div className="flex justify-between font-sans text-base font-bold text-on-surface pt-2 border-t border-outline-variant">
           <span>Total</span>
-          <span>{cart.total.toFixed(2)} $ CAD</span>
+          <span>{(breakdown?.total ?? cart.total).toFixed(2)} $ CAD</span>
         </div>
-        <p className="font-sans text-[10px] text-on-surface-variant">Taxes incluses · CAD</p>
+        {!breakdown && (
+          <p className="font-sans text-[10px] text-on-surface-variant">
+            Remise et taxes applicables calculées à l'étape suivante · CAD
+          </p>
+        )}
+        {breakdown && breakdown.taxes.length === 0 && (
+          <p className="font-sans text-[10px] text-on-surface-variant">Aucune taxe applicable · CAD</p>
+        )}
+        <p className="font-sans text-[10px] text-on-surface-variant flex items-center gap-1">
+          <span className="material-symbols-outlined text-xs">local_shipping</span>
+          Délai de livraison : {deliveryDelay}
+        </p>
       </div>
     </div>
   );
