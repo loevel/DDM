@@ -19,6 +19,8 @@ id = "5927b4f2125d40af8892a7edf81f4802"
 
 [vars]
 ENVIRONMENT = "production"
+CF_ACCOUNT_ID = "d58014fa11833876c245e4828ab1cc8a"
+CF_ACCOUNT_HASH = ""   # à remplir — visible dans Cloudflare Dashboard → Images → "Account Hash"
 
 # ── Environnement Preview/Staging (branches PR) ──────────────────────────────
 [env.preview]
@@ -37,7 +39,7 @@ id = "5927b4f2125d40af8892a7edf81f4802"
 
 [env.preview.vars]
 ENVIRONMENT = "preview"
-CF_ACCOUNT_ID = ""     # à remplir — visible dans le tableau de bord Cloudflare (URL: dash.cloudflare.com → Images)
+CF_ACCOUNT_ID = "d58014fa11833876c245e4828ab1cc8a"
 CF_ACCOUNT_HASH = ""   # à remplir — visible dans Images → "Account Hash"
 # MODE TEST — remplacer par pk_live_... quand Stripe live est activé
 # Stripe Dashboard → Developers → API keys → Publishable key
