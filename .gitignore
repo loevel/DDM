@@ -7,3 +7,5 @@ build/
 *.log
 .DS_Store
 .archive/
+server.js
+vite.config.js
