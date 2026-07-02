@@ -18,6 +18,24 @@ id = "5927b4f2125d40af8892a7edf81f4802"
 
 [vars]
 ENVIRONMENT = "production"
+
+# ── Environnement Preview/Staging (branches PR) ──────────────────────────────
+[env.preview]
+[[env.preview.d1_databases]]
+binding = "DB"
+database_name = "ddm-wigs-db-staging"
+database_id = "1d364cf9-9814-4e59-8eb7-eedfab805e1d"
+
+[[env.preview.r2_buckets]]
+binding = "MEDIA"
+bucket_name = "ddm-wigs-assets"
+
+[[env.preview.kv_namespaces]]
+binding = "CACHE"
+id = "5927b4f2125d40af8892a7edf81f4802"
+
+[env.preview.vars]
+ENVIRONMENT = "preview"
 CF_ACCOUNT_ID = ""     # à remplir — visible dans le tableau de bord Cloudflare (URL: dash.cloudflare.com → Images)
 CF_ACCOUNT_HASH = ""   # à remplir — visible dans Images → "Account Hash"
 # MODE TEST — remplacer par pk_live_... quand Stripe live est activé
