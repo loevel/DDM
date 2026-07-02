@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { Form, Link, useActionData, useFetcher, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
 import { ProduitFormFields, VariantsEditor } from "./admin.produits.nouveau";
+import { getAdminUser, logAdminAction } from "~/lib/admin-session.server";
 import type { MediaItem, VariantRow } from "./admin.produits.nouveau";
 
 export const meta: MetaFunction = () => [{ title: "Modifier produit — Admin DDM" }];
@@ -126,6 +127,13 @@ export async function action({ request, params, context }: ActionFunctionArgs) {
   if (variants.length > 0) {
     await db.prepare("UPDATE products SET stock = ? WHERE id = ?").bind(totalVariantStock, params.id).run();
   }
+
+  await logAdminAction(context, {
+    admin: await getAdminUser(request, context),
+    action: "product.update", entity: "product", entityId: params.id,
+    details: { name: g("name"), price_cad: Number(g("price_cad")), stock: variants.length > 0 ? totalVariantStock : Number(g("stock") || 0) },
+    request,
+  });
 
   throw redirect("/admin/produits");
 }

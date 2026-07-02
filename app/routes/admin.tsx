@@ -88,6 +88,7 @@ const NAV = [
 
   { section: "Outils" },
   { to: "/admin/recherche",    label: "Recherche",      icon: "search" },
+  { to: "/admin/utilisateurs", label: "Utilisateurs",   icon: "admin_panel_settings" },
   { to: "/admin/parametres",   label: "Paramètres",     icon: "settings" },
 ] as const;
 

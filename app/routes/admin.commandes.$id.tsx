@@ -2,6 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { cfImage } from "~/lib/images";
+import { getAdminUser, logAdminAction } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Détail commande — Admin DDM" }];
 
@@ -96,6 +97,7 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
   const db = context.cloudflare.env.DB;
   const resendKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
   const intent = g("_action");
+  const admin = await getAdminUser(request, context);
 
   if (intent === "update_status") {
     const newStatus = g("status");
@@ -105,6 +107,10 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
 
     await db.prepare("UPDATE orders SET status = ? WHERE id = ?")
       .bind(newStatus, params.id).run();
+    await logAdminAction(context, {
+      admin, action: "order.update_status", entity: "order", entityId: order.reference,
+      details: { status: newStatus }, request,
+    });
 
     let emailMsg = "";
     if (resendKey) {
@@ -124,6 +130,10 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
     const newStatus = tracking ? "shipped" : order.status;
     await db.prepare("UPDATE orders SET tracking_number = ?, tracking_carrier = ?, status = ? WHERE id = ?")
       .bind(tracking || null, carrier || null, newStatus, params.id).run();
+    await logAdminAction(context, {
+      admin, action: "order.update_tracking", entity: "order", entityId: order.reference,
+      details: { tracking, carrier, status: newStatus }, request,
+    });
 
     let emailMsg = "";
     if (tracking && resendKey) {
@@ -139,6 +149,10 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
     const discount = Number(g("discount_override_cad")) || 0;
     await db.prepare("UPDATE orders SET discount_override_cad = ?, admin_note = ? WHERE id = ?")
       .bind(discount, g("admin_note") || null, params.id).run();
+    await logAdminAction(context, {
+      admin, action: "order.update_discount", entity: "order", entityId: params.id,
+      details: { discount }, request,
+    });
     return json({ ok: true, msg: "Remise et note enregistrées." });
   }
 
