@@ -8,7 +8,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const productId = url.searchParams.get("productId");
   if (!productId) return json({ questions: [] });
 
-  const db = (context as any).cloudflare.env.DB;
+  const db = context.cloudflare.env.DB;
   const { results } = await db
     .prepare(
       "SELECT id, customer_name, question, answer, answered_at, created_at FROM product_questions WHERE product_id = ? AND answered_at IS NOT NULL ORDER BY answered_at DESC LIMIT 30"
@@ -29,7 +29,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return json({ error: "Données invalides" }, { status: 400 });
   }
 
-  const db = (context as any).cloudflare.env.DB;
+  const db = context.cloudflare.env.DB;
   await db
     .prepare("INSERT INTO product_questions (product_id, customer_name, question) VALUES (?,?,?)")
     .bind(productId, customerName.trim().slice(0, 100), question.trim().slice(0, 500))

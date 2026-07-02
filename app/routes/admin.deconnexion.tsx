@@ -1,5 +1,5 @@
 import { redirect } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs } from "@remix-run/react";
+import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { clearAdminCookie, destroyAdminSession, getAdminSessionId } from "~/lib/admin-session.server";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {

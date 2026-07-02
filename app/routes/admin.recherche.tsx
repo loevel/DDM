@@ -17,7 +17,7 @@ const STATUS_FR: Record<string, string> = {
 };
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";
 

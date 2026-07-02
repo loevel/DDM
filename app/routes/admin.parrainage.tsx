@@ -5,7 +5,7 @@ import { useLoaderData } from "@remix-run/react";
 export const meta: MetaFunction = () => [{ title: "Parrainage — Admin DDM" }];
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
 
   const [stats, referrals] = await Promise.all([
     db.prepare(`

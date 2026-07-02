@@ -1,5 +1,5 @@
 import { json, redirect } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
 

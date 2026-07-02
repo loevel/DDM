@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { getDB } from "~/lib/db.server";
 import { isAdminAuthenticated } from "~/lib/admin-session.server";
 import { getCustomerId } from "~/lib/session.server";
@@ -33,7 +33,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const isAdmin = await isAdminAuthenticated(request, context as any).catch(() => false);
   if (!isAdmin) return Response.json({ error: "Non autorisé" }, { status: 401 });
 
-  const { name, email, phone, type, items, notes } = await request.json<any>();
+  const { name, email, phone, type, items, notes } = await request.json();
   if (!name || !email || !type || !items?.length) return Response.json({ error: "Données incomplètes" }, { status: 400 });
 
   const db = getDB(context);

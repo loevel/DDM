@@ -1,12 +1,12 @@
 import { json, redirect } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs } from "@remix-run/react";
+import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { Link, NavLink, Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { isAdminAuthenticated } from "~/lib/admin-session.server";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   if (url.pathname === "/admin/connexion") {
-    return json({ pendingOrders: 0, unreadMessages: 0 });
+    return json({ pendingOrders: 0, unreadMessages: 0, abandonedCarts: 0 });
   }
 
   const authed = await isAdminAuthenticated(request, context);
@@ -16,7 +16,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     throw redirect("/admin/dashboard");
   }
 
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
 
   let pendingOrders = 0;
   try {
@@ -105,7 +105,7 @@ export default function AdminLayout() {
           <p className="text-[10px] text-white/40 uppercase tracking-widest">Administration</p>
         </div>
         <nav className="flex-1 py-3 px-2 overflow-y-auto">
-          {(NAV as any[]).map((item, i) =>
+          {(NAV as unknown as any[]).map((item, i) =>
             item.section ? (
               <p key={i} className="text-[9px] font-bold text-white/25 uppercase tracking-[0.15em] px-3 pt-4 pb-1.5">
                 {item.section}

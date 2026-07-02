@@ -1,4 +1,4 @@
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/cloudflare";
 import type { Cart, CartItem } from "~/lib/db.server";
 import { getCache, getDB } from "~/lib/db.server";
 
@@ -16,12 +16,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const cartId = new URL(request.url).searchParams.get("cartId");
   if (!cartId) return Response.json({ error: "cartId requis" }, { status: 400 });
 
-  const { productId, quantity, variantId, variantName } = await request.json<{
-    productId: number;
-    quantity: number;
-    variantId?: number;
-    variantName?: string;
-  }>();
+  const { productId, quantity, variantId, variantName } = await request.json();
 
   const [cache, db] = [getCache(context), getDB(context)];
 

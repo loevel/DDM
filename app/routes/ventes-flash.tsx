@@ -1,5 +1,5 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { getDB } from "~/lib/db.server";
@@ -17,7 +17,7 @@ interface FlashProduct extends Product {
 }
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = getDB(context as any);
+  const db = getDB(context);
   const now = new Date().toISOString();
 
   try {

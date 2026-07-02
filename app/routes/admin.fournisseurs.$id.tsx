@@ -1,5 +1,5 @@
 import { json, redirect } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 
 export const meta: MetaFunction = () => [{ title: "Fournisseur — Admin DDM" }];
@@ -72,8 +72,8 @@ export default function FournisseurDetail() {
           Informations fournisseur
         </h2>
 
-        {data?.error && (
-          <div className="mb-4 p-3 bg-error-container text-on-error-container text-sm">{data.error}</div>
+        {(data as any)?.error && (
+          <div className="mb-4 p-3 bg-error-container text-on-error-container text-sm">{(data as any).error}</div>
         )}
         {(data as any)?.ok && (
           <div className="mb-4 p-3 bg-secondary/10 text-secondary text-sm flex items-center gap-2">

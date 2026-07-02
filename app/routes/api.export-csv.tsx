@@ -31,7 +31,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = getDB(context as any);
+  const db = getDB(context);
   const url = new URL(request.url);
   const type = url.searchParams.get("type") ?? "commandes";
   const status = url.searchParams.get("status") ?? "all";

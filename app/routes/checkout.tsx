@@ -11,7 +11,7 @@ export const meta: MetaFunction = () => [
 ];
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const env = (context as any).cloudflare.env;
+  const env = context.cloudflare.env;
   const publishableKey = (env.STRIPE_PUBLISHABLE_KEY as string | undefined) ?? "";
   return json({ publishableKey });
 }

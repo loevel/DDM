@@ -1,5 +1,5 @@
 import { json, redirect } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useFetcher, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
 import { ProduitFormFields, VariantsEditor } from "./admin.produits.nouveau";
@@ -217,8 +217,8 @@ export default function EditProduit() {
         <h1 className="text-2xl font-bold text-on-surface">Modifier : {(product as any).name}</h1>
       </div>
 
-      {data?.error && (
-        <div className="mb-6 p-4 bg-error-container text-on-error-container text-sm">{data.error}</div>
+      {(data as any)?.error && (
+        <div className="mb-6 p-4 bg-error-container text-on-error-container text-sm">{(data as any).error}</div>
       )}
 
       <Form method="post" className="space-y-6">

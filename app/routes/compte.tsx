@@ -1,5 +1,5 @@
 import { redirect } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs } from "@remix-run/react";
+import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { Link, NavLink, Outlet, useLoaderData, useLocation } from "@remix-run/react";
 import { getCustomer } from "~/lib/auth.server";
 import { getCustomerId } from "~/lib/session.server";

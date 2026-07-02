@@ -21,7 +21,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const budget     = form.get("budget") as string;
   const facilite   = form.get("facilite") as string;
 
-  const db = getDB(context as any);
+  const db = getDB(context);
 
   // Sauvegarder le résultat si la cliente est connectée
   try {
@@ -29,7 +29,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (customerId) {
       const answers = { experience, texture, budget, facilite,
         occasion: form.get("occasion") as string };
-      await (context as any).cloudflare.env.DB
+      await context.cloudflare.env.DB
         .prepare("UPDATE customers SET quiz_result = ?, quiz_completed_at = datetime('now'), texture_preferee = ?, budget_habituel = ? WHERE id = ?")
         .bind(JSON.stringify(answers), texture || null, budget || null, customerId)
         .run();

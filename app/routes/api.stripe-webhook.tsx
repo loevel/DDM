@@ -3,7 +3,7 @@ import Stripe from "stripe";
 
 // POST /api/stripe-webhook  (Stripe → confirme le paiement)
 export async function action({ request, context }: ActionFunctionArgs) {
-  const env = (context as any).cloudflare.env;
+  const env = context.cloudflare.env;
   const stripeSecret = env.STRIPE_SECRET_KEY as string | undefined;
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET as string | undefined;
 
@@ -11,7 +11,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   // La vérification de signature est obligatoire — configurer STRIPE_WEBHOOK_SECRET
   if (!webhookSecret) return new Response("Webhook secret manquant", { status: 503 });
 
-  const stripe = new Stripe(stripeSecret, { apiVersion: "2025-04-30.basil" });
+  const stripe = new Stripe(stripeSecret, { apiVersion: "2026-06-24.dahlia" });
   const body = await request.text();
 
   let event: Stripe.Event;

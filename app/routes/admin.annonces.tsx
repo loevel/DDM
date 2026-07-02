@@ -33,7 +33,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const { results } = await (context.cloudflare.env as any).DB
+  const { results } = await context.cloudflare.env.DB
     .prepare("SELECT * FROM announcements ORDER BY position ASC, id ASC")
     .all<Announcement>();
 
@@ -44,7 +44,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
   const form = await request.formData();
   const intent = form.get("intent") as string;
 

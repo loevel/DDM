@@ -94,7 +94,7 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
   const f = await request.formData();
   const g = (k: string) => String(f.get(k) ?? "").trim();
   const db = context.cloudflare.env.DB;
-  const resendKey = (context.cloudflare.env as any).RESEND_API_KEY as string | undefined;
+  const resendKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
   const intent = g("_action");
 
   if (intent === "update_status") {
@@ -182,7 +182,7 @@ export default function CommandeDetail() {
       {actionData?.ok && (
         <div className="bg-green-50 border border-green-200 text-green-800 rounded px-4 py-3 mb-5 text-sm flex items-center gap-2">
           <span className="material-symbols-outlined text-base">check_circle</span>
-          {actionData.msg}
+          {(actionData as any).msg}
         </div>
       )}
 

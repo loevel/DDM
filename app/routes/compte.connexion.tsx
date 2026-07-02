@@ -1,5 +1,5 @@
 import { redirect } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
 import { sendMagicLink } from "~/lib/auth.server";
 import { getCustomerId } from "~/lib/session.server";

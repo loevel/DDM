@@ -1,5 +1,5 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
 import { getDB } from "~/lib/db.server";
 import { cfImage } from "~/lib/images";
@@ -19,7 +19,7 @@ interface Collection {
 }
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = getDB(context as any);
+  const db = getDB(context);
   const { results } = await db.prepare(`
     SELECT c.id, c.name, c.slug, c.description, c.image_key,
            COUNT(pc.product_id) as product_count

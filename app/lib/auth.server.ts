@@ -46,7 +46,7 @@ export async function sendMagicLink(
     </div>
   `;
 
-  const resendApiKey = (context.cloudflare.env as any).RESEND_API_KEY as string | undefined;
+  const resendApiKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
 
   if (!resendApiKey) {
     // Mode dev : affiche le lien dans les logs Cloudflare

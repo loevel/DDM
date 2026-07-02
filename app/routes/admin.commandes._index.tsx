@@ -1,5 +1,5 @@
 import { json } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react";
 
 export const meta: MetaFunction = () => [{ title: "Commandes — Admin DDM" }];
@@ -40,7 +40,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const ref = String(form.get("reference"));
   const newStatus = String(form.get("status"));
   const db = context.cloudflare.env.DB;
-  const resendKey = (context.cloudflare.env as any).RESEND_API_KEY as string | undefined;
+  const resendKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
 
   await db.prepare("UPDATE orders SET status = ? WHERE reference = ?")
     .bind(newStatus, ref).run();

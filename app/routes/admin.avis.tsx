@@ -21,7 +21,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = getDB(context as any);
+  const db = getDB(context);
   const url = new URL(request.url);
   const filter = url.searchParams.get("filtre") ?? "en-attente";
 
@@ -55,7 +55,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = getDB(context as any);
+  const db = getDB(context);
   const formData = await request.formData();
   const intent = formData.get("intent") as string;
   const reviewId = Number(formData.get("reviewId"));

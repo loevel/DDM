@@ -23,7 +23,7 @@ function urlEntry(loc: string, lastmod: string, changefreq: string, priority: st
 }
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = getDB(context as any);
+  const db = getDB(context);
   const today = new Date().toISOString().slice(0, 10);
 
   const [products, collections] = await Promise.all([

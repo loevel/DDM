@@ -76,6 +76,8 @@ export interface Product {
   image_key: string | null;
   featured: number;
   created_at: string;
+  sku?: string | null;
+  tags?: string | null;
 }
 
 

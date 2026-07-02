@@ -1,5 +1,5 @@
 import { json, redirect } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState, useRef } from "react";
 import { cfImage } from "~/lib/images";
@@ -8,7 +8,7 @@ export const meta: MetaFunction = () => [{ title: "Nouveau produit — Admin DDM
 
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = context.cloudflare.env.DB;
-  const { results } = await db.prepare("SELECT id, nom FROM fournisseurs ORDER BY nom ASC").all<{ id: number; nom: string }>().catch(() => ({ results: [] }));
+  const { results } = await db.prepare("SELECT id, nom FROM fournisseurs ORDER BY nom ASC").all<{ id: number; nom: string }>().catch(() => ({ results: [] as { id: number; nom: string }[] }));
   return json({ fournisseurs: results ?? [] });
 }
 
