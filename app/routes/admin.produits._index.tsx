@@ -1,6 +1,7 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react";
+import { getAdminUser, logAdminAction } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Produits — Admin DDM" }];
 
@@ -28,7 +29,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const db = context.cloudflare.env.DB;
 
   if (intent === "delete") {
-    await db.prepare("DELETE FROM products WHERE id = ?").bind(String(form.get("id"))).run();
+    const id = String(form.get("id"));
+    const product = await db.prepare("SELECT name FROM products WHERE id = ?").bind(id).first<{ name: string }>();
+    await db.prepare("DELETE FROM products WHERE id = ?").bind(id).run();
+    await logAdminAction(context, {
+      admin: await getAdminUser(request, context),
+      action: "product.delete", entity: "product", entityId: id,
+      details: { name: product?.name }, request,
+    });
     return json({ ok: true });
   }
   if (intent === "toggle-featured") {
