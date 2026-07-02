@@ -34,7 +34,7 @@ function buildAnnouncementText(event: CalEvent) {
 }
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
   const today = new Date().toISOString().slice(0, 10);
 
   // Désactiver les annonces liées aux événements terminés
@@ -63,7 +63,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
   const f = await request.formData();
   const g = (k: string) => String(f.get(k) ?? "").trim();
   const intent = g("intent");

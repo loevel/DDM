@@ -7,7 +7,8 @@ import * as build from "./build/server/index.js";
 // l'utiliser sans importer cloudflare:email directement (non résolvable par Vite)
 (globalThis as any).__CF_EmailMessage = EmailMessage;
 
-const handler = createRequestHandler(build);
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const handler = createRequestHandler(build as any);
 
 const SECURITY_HEADERS: Record<string, string> = {
   "X-Frame-Options": "DENY",

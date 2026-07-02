@@ -9,7 +9,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const productId = url.searchParams.get("productId");
   if (!productId) return json({ reviews: [] });
 
-  const db = getDB(context as any);
+  const db = getDB(context);
   const result = await db
     .prepare(
       "SELECT id, customer_name, rating, body, photos, verified_purchase, created_at FROM reviews WHERE product_id = ? AND approved = 1 ORDER BY created_at DESC LIMIT 20"
@@ -49,7 +49,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return json({ error: "Données invalides" }, { status: 400 });
   }
 
-  const db = getDB(context as any);
+  const db = getDB(context);
 
   const product = await db.prepare("SELECT id FROM products WHERE id = ?").bind(productId).first();
   if (!product) return json({ error: "Produit introuvable" }, { status: 404 });

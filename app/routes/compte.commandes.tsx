@@ -1,5 +1,5 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { useLoaderData } from "@remix-run/react";
 import { getCustomer } from "~/lib/auth.server";
 import { getCustomerId } from "~/lib/session.server";

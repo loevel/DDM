@@ -20,7 +20,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = (context as any).cloudflare.env.DB;
+  const db = context.cloudflare.env.DB;
   const url = new URL(request.url);
   const filter = url.searchParams.get("filtre") ?? "sans-reponse";
 
@@ -46,7 +46,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = (context as any).cloudflare.env.DB;
+  const db = context.cloudflare.env.DB;
   const f = await request.formData();
   const intent = String(f.get("intent") ?? "");
 

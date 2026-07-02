@@ -1,5 +1,5 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useRef, useState } from "react";
 import { getDB, getProducts } from "~/lib/db.server";
@@ -48,7 +48,7 @@ interface ProductVariant { id: number; name: string; price_adjustment_cad: numbe
 // ─── Loader ────────────────────────────────────────────────────────────────
 
 export async function loader({ params, request, context }: LoaderFunctionArgs) {
-  const db = getDB(context as any);
+  const db = getDB(context);
   const product = await db
     .prepare("SELECT * FROM products WHERE slug = ?")
     .bind(params.slug)
@@ -59,17 +59,25 @@ export async function loader({ params, request, context }: LoaderFunctionArgs) {
   if (!product && !demoProduct) throw new Response("Produit introuvable", { status: 404 });
   if (!product && demoProduct) {
     return json({
-      product: demoProduct,
+      product: demoProduct as Product,
       media: demoProduct.image_key ? [{ type: "image" as const, url: demoProduct.image_key, thumbnail_url: null, alt_text: null }] : [],
       related: [],
       longueurVars: [],
       couleurVars: [],
+      productVariants: [] as ProductVariant[],
       reviews: [],
       reviewStats: { count: 0, avg: 0, dist: [0, 0, 0, 0, 0] },
       flash: null,
       qa: [],
+      currentCustomer: null,
+      hasPurchased: false,
+      alreadyReviewed: false,
     });
   }
+  // After the two guards above, product is guaranteed non-null.
+  // TypeScript's narrowing doesn't always detect this through complex control flow,
+  // so we add an explicit assertion here.
+  if (!product) throw new Response("Produit introuvable", { status: 404 });
 
   // Variantes de longueur : même famille + texture, tous stocks
   const longueurVars = product.famille && product.texture
@@ -175,6 +183,7 @@ const BASE = "https://ddmwigs.com";
 export const meta: MetaFunction<typeof loader> = ({ data }) => {
   if (!data) return [{ title: "Produit — DDM Wigs" }];
   const p = data.product;
+  if (!p) return [{ title: "Produit — DDM Wigs" }];
   const url = `${BASE}/boutique/${p.slug}`;
   const description = p.description
     ?? `${p.name} — Perruque cheveux humains premium. ${p.texture ?? ""} ${p.longueur_po ? p.longueur_po + " po" : ""}. Prix: ${p.price_cad.toFixed(2)} $ CAD.`;
@@ -857,7 +866,7 @@ export default function FicheProduit() {
                 ["Prêt à porter", p.pret_a_porter === 1 ? "Oui — 5 minutes" : "Non"],
                 ["Peut être teint", "Oui (conseillé professionnel)"],
                 ["Résistance chaleur", "Oui — max 180°C avec protecteur"],
-              ] as ([string, string] | null)[]).filter(Boolean).map(([label, value]) => (
+              ] as ([string, string] | null)[]).filter((x): x is [string, string] => x !== null).map(([label, value]) => (
                 <tr key={label as string}>
                   <td className="py-2.5 pr-6 font-semibold text-on-surface w-52">{label as string}</td>
                   <td className="py-2.5 text-on-surface-variant">{value as string}</td>

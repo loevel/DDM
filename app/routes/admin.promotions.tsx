@@ -22,7 +22,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = getDB(context as any);
+  const db = getDB(context);
   const codes = (await db.prepare(
     "SELECT * FROM promo_codes ORDER BY created_at DESC"
   ).all<PromoCode>()).results ?? [];
@@ -34,7 +34,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = getDB(context as any);
+  const db = getDB(context);
   const form = await request.formData();
   const intent = form.get("intent") as string;
 

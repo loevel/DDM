@@ -22,7 +22,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   if (!code) return json({ valid: false, error: "Code manquant" });
 
-  const db = getDB(context as any);
+  const db = getDB(context);
   const promo = await db
     .prepare("SELECT * FROM promo_codes WHERE code = ? COLLATE NOCASE")
     .bind(code)
@@ -65,7 +65,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const body = await request.json() as { code?: string };
   if (!body.code) return json({ error: "Code manquant" }, { status: 400 });
 
-  const db = getDB(context as any);
+  const db = getDB(context);
   await db
     .prepare("UPDATE promo_codes SET used_count = used_count + 1 WHERE code = ? COLLATE NOCASE AND active = 1")
     .bind(body.code)

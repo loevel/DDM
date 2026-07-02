@@ -1,12 +1,12 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
 import { getDB } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
 import { cfImage } from "~/lib/images";
 
 export async function loader({ params, context }: LoaderFunctionArgs) {
-  const db = getDB(context as any);
+  const db = getDB(context);
   const slug = params.slug;
 
   const collection = await db

@@ -6,7 +6,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const customerId = await getCustomerId(request, context);
   if (!customerId) return json(null, { status: 401 });
 
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
 
   const customer = await db
     .prepare("SELECT id, email, name, phone FROM customers WHERE id = ?")

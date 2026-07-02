@@ -133,7 +133,7 @@ async function ensurePromo(db: D1Database, id: number, existing: string | null):
 
 // ── Route handler ──────────────────────────────────────────────────────────────
 export async function action({ request, context }: ActionFunctionArgs) {
-  const env = (context as any).cloudflare.env;
+  const env = context.cloudflare.env;
 
   // Protégé par CRON_TOKEN (variable Pages, même valeur que CRON_SECRET du Worker)
   const secret = request.headers.get("x-cron-secret");

@@ -9,11 +9,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) return json({ error: "Non autorisé" }, { status: 401 });
 
-  const body = await request.json<{
-    action: "remind_1" | "remind_2" | "remind_3" | "recover" | "generate_promo";
-    cartDbId: number;
-    notes?: string;
-  }>();
+  const body = await request.json();
 
   const db = getDB(context);
 

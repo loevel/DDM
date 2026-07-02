@@ -31,7 +31,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
 
   const { results: sales } = await db.prepare(`
     SELECT fs.*, p.name as product_name, p.price_cad as product_price
@@ -56,7 +56,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const authed = await isAdminAuthenticated(request, context);
   if (!authed) throw redirect("/admin/connexion");
 
-  const db = (context.cloudflare.env as any).DB;
+  const db = context.cloudflare.env.DB;
   const form = await request.formData();
   const intent = form.get("intent") as string;
 

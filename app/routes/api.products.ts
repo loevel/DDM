@@ -1,4 +1,4 @@
-import type { LoaderFunctionArgs } from "@remix-run/react";
+import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { getDB, getProducts } from "~/lib/db.server";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {

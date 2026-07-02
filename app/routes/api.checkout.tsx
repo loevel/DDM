@@ -5,27 +5,14 @@ import Stripe from "stripe";
 // POST /api/checkout  { cartId, customerInfo, promoCode? }
 //   → { clientSecret, orderRef }
 export async function action({ request, context }: ActionFunctionArgs) {
-  const env = (context as any).cloudflare.env;
+  const env = context.cloudflare.env;
   const stripeSecret = env.STRIPE_SECRET_KEY as string | undefined;
 
   if (!stripeSecret) {
     return json({ error: "Paiement en ligne non configuré." }, { status: 503 });
   }
 
-  const body = await request.json<{
-    cartId: string;
-    customerInfo: {
-      name: string;
-      email: string;
-      phone?: string;
-      line1: string;
-      city: string;
-      province: string;
-      postal_code: string;
-    };
-    promoCode?: string;
-    referralCode?: string;
-  }>();
+  const body = await request.json();
 
   const { cartId, customerInfo, promoCode, referralCode } = body;
 
@@ -163,7 +150,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   // Créer le PaymentIntent Stripe
-  const stripe = new Stripe(stripeSecret, { apiVersion: "2025-04-30.basil" });
+  const stripe = new Stripe(stripeSecret, { apiVersion: "2026-06-24.dahlia" });
 
   const paymentIntent = await stripe.paymentIntents.create({
     amount: amountCents,

@@ -1,5 +1,5 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { getDB, getProducts } from "~/lib/db.server";
@@ -87,7 +87,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   } = { famille: {}, texture: {}, lace: {} };
 
   try {
-    const db = getDB(context as any);
+    const db = getDB(context);
     products = await getProducts(db, {
       famille: p("famille") || undefined,
       texture: p("texture") || undefined,

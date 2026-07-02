@@ -1,5 +1,5 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/react";
+import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { getDB, getProducts } from "~/lib/db.server";
@@ -23,7 +23,7 @@ interface PromoCode {
 }
 
 export async function loader({ context }: LoaderFunctionArgs) {
-  const db = getDB(context as any);
+  const db = getDB(context);
 
   // Produits soldés (compare_at_price_cad > price_cad)
   let saleProducts: Product[] = [];

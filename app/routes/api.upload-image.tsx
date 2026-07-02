@@ -16,7 +16,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!customerId) return json({ error: "Non autorisé" }, { status: 401 });
   }
 
-  const env = (context as any).cloudflare.env;
+  const env = context.cloudflare.env;
   const CF_ACCOUNT_ID: string | undefined = env.CF_ACCOUNT_ID;
   const CF_ACCOUNT_HASH: string | undefined = env.CF_ACCOUNT_HASH;
   const CF_IMAGES_TOKEN: string | undefined = env.CF_IMAGES_TOKEN;
