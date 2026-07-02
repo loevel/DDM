@@ -1,0 +1,14 @@
+name = "ddm-wigs-mailer"
+main = "worker.ts"
+compatibility_date = "2024-11-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "ddm-wigs-db"
+database_id = "0047be0b-294e-471a-b4dd-f94204bb9081"
+
+[triggers]
+crons = ["*/15 * * * *"]
+
+# Secrets à configurer via : wrangler secret put RESEND_API_KEY --name ddm-wigs-mailer
+# RESEND_API_KEY — resend.com → API Keys

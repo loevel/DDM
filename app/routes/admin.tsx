@@ -38,7 +38,19 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     unreadMessages = 0;
   }
 
-  return json({ pendingOrders, unreadMessages });
+  let abandonedCarts = 0;
+  try {
+    const row = await db
+      .prepare(`SELECT COUNT(*) as count FROM abandoned_carts
+        WHERE status IN ('active','abandoned') AND email IS NOT NULL
+        AND ROUND((julianday('now') - julianday(updated_at)) * 24 * 60) > 60`)
+      .first<{ count: number }>();
+    abandonedCarts = row?.count ?? 0;
+  } catch {
+    abandonedCarts = 0;
+  }
+
+  return json({ pendingOrders, unreadMessages, abandonedCarts });
 }
 
 const NAV = [
@@ -70,8 +82,9 @@ const NAV = [
   { to: "/admin/annonces",     label: "Annonces",       icon: "campaign" },
 
   { section: "Marketing" },
-  { to: "/admin/calendrier",   label: "Calendrier",     icon: "calendar_month" },
-  { to: "/admin/parrainage",   label: "Parrainage",     icon: "group_add" },
+  { to: "/admin/calendrier",          label: "Calendrier",          icon: "calendar_month" },
+  { to: "/admin/parrainage",          label: "Parrainage",          icon: "group_add" },
+  { to: "/admin/paniers-abandonnes",  label: "Paniers abandonnés",  icon: "shopping_cart_off" },
 
   { section: "Outils" },
   { to: "/admin/recherche",    label: "Recherche",      icon: "search" },
@@ -79,7 +92,7 @@ const NAV = [
 ] as const;
 
 export default function AdminLayout() {
-  const { pendingOrders, unreadMessages } = useLoaderData<typeof loader>();
+  const { pendingOrders, unreadMessages, abandonedCarts } = useLoaderData<typeof loader>();
   const { pathname } = useLocation();
   if (pathname === "/admin/connexion") return <Outlet />;
 
@@ -119,6 +132,11 @@ export default function AdminLayout() {
                 {item.to === "/admin/clients" && unreadMessages > 0 && (
                   <span className="bg-error text-on-error text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
                     {unreadMessages}
+                  </span>
+                )}
+                {item.to === "/admin/paniers-abandonnes" && abandonedCarts > 0 && (
+                  <span className="bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center leading-none">
+                    {abandonedCarts}
                   </span>
                 )}
               </NavLink>

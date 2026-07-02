@@ -8,22 +8,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const webhookSecret = env.STRIPE_WEBHOOK_SECRET as string | undefined;
 
   if (!stripeSecret) return new Response("Not configured", { status: 503 });
+  // La vérification de signature est obligatoire — configurer STRIPE_WEBHOOK_SECRET
+  if (!webhookSecret) return new Response("Webhook secret manquant", { status: 503 });
 
   const stripe = new Stripe(stripeSecret, { apiVersion: "2025-04-30.basil" });
   const body = await request.text();
 
   let event: Stripe.Event;
-
-  if (webhookSecret) {
-    const sig = request.headers.get("stripe-signature");
-    if (!sig) return new Response("Missing signature", { status: 400 });
-    try {
-      event = await stripe.webhooks.constructEventAsync(body, sig, webhookSecret);
-    } catch {
-      return new Response("Invalid signature", { status: 400 });
-    }
-  } else {
-    event = JSON.parse(body) as Stripe.Event;
+  const sig = request.headers.get("stripe-signature");
+  if (!sig) return new Response("Missing signature", { status: 400 });
+  try {
+    event = await stripe.webhooks.constructEventAsync(body, sig, webhookSecret);
+  } catch {
+    return new Response("Invalid signature", { status: 400 });
   }
 
   const db = env.DB;
@@ -90,6 +87,24 @@ export async function action({ request, context }: ActionFunctionArgs) {
         }
       }
     } catch { /* ne pas bloquer le webhook si erreur stock */ }
+
+    // Marquer le panier abandonné comme récupéré
+    try {
+      const paidOrderForCart = await db
+        .prepare("SELECT customer_email, reference FROM orders WHERE stripe_payment_intent_id = ?")
+        .bind(pi.id)
+        .first<{ customer_email: string; reference: string }>();
+
+      if (paidOrderForCart?.customer_email) {
+        await db.prepare(`
+          UPDATE abandoned_carts
+          SET status = 'recovered',
+              order_reference = ?,
+              updated_at = datetime('now')
+          WHERE email = ? AND status IN ('active', 'abandoned')
+        `).bind(paidOrderForCart.reference, paidOrderForCart.customer_email).run();
+      }
+    } catch { /* ne pas bloquer le webhook */ }
 
     // Sauvegarder l'adresse de livraison si la cliente n'en a pas encore
     try {

@@ -103,6 +103,16 @@ export default function Checkout() {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
+
+    // Capturer l'email pour le suivi des paniers abandonnés
+    if (cartId && customerInfo.email) {
+      fetch("/api/cart-identify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ cartId, email: customerInfo.email, name: customerInfo.name }),
+      }).catch(() => {});
+    }
+
     try {
       const res = await fetch("/api/checkout", {
         method: "POST",

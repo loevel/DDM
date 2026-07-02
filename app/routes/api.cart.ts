@@ -34,7 +34,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
     .first<{ id: number; name: string; price_cad: number; slug: string }>();
   if (!product) return Response.json({ error: "Produit introuvable" }, { status: 404 });
 
-  // Si une variante est demandée, vérifier son stock et ajuster le prix
   let effectivePrice = product.price_cad;
   if (variantId) {
     const variant = await db
@@ -48,7 +47,6 @@ export async function action({ request, context }: ActionFunctionArgs) {
     effectivePrice = product.price_cad + variant.price_adjustment_cad;
   }
 
-  // Trouver l'item existant (même produit + même variante)
   const idx = cart.items.findIndex(
     (i: CartItem) => i.productId === productId && (i.variantId ?? null) === (variantId ?? null)
   );
@@ -71,5 +69,29 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   cart.total = cart.items.reduce((s: number, i: CartItem) => s + i.price_cad * i.quantity, 0);
   await cache.put(cartKey(cartId), JSON.stringify(cart), { expirationTtl: 86400 * 7 });
+
+  // Persister le snapshot en D1 pour le suivi des paniers abandonnés
+  try {
+    if (cart.items.length > 0) {
+      await db.prepare(`
+        INSERT INTO abandoned_carts (cart_id, items_json, total_cad, status, updated_at)
+        VALUES (?, ?, ?, 'active', datetime('now'))
+        ON CONFLICT(cart_id) DO UPDATE SET
+          items_json = excluded.items_json,
+          total_cad = excluded.total_cad,
+          status = CASE WHEN status = 'recovered' THEN 'recovered' ELSE 'active' END,
+          updated_at = datetime('now')
+      `).bind(cartId, JSON.stringify(cart.items), cart.total).run();
+    } else {
+      // Panier vidé → marquer comme expiré
+      await db.prepare(`
+        UPDATE abandoned_carts SET status = 'expired', updated_at = datetime('now')
+        WHERE cart_id = ? AND status = 'active'
+      `).bind(cartId).run();
+    }
+  } catch {
+    // Table pas encore créée : ne pas bloquer l'opération principale
+  }
+
   return Response.json(cart);
 }
