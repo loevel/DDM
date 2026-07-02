@@ -88,6 +88,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
       }
     } catch { /* ne pas bloquer le webhook si erreur stock */ }
 
+    // Décompter l'utilisation du code promo (au paiement confirmé seulement,
+    // pour ne pas brûler les usages sur des checkouts abandonnés)
+    try {
+      const orderPromo = await db
+        .prepare("SELECT promo_code FROM orders WHERE stripe_payment_intent_id = ?")
+        .bind(pi.id)
+        .first<{ promo_code: string | null }>();
+      if (orderPromo?.promo_code) {
+        await db.prepare("UPDATE promo_codes SET used_count = used_count + 1 WHERE code = ?")
+          .bind(orderPromo.promo_code).run();
+      }
+    } catch { /* ne pas bloquer le webhook */ }
+
     // Marquer le panier abandonné comme récupéré
     try {
       const paidOrderForCart = await db

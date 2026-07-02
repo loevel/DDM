@@ -13,6 +13,10 @@ const FIELDS = [
   "contact_email",
   "site_slogan",
   "footer_note",
+  "taxes_enabled",
+  "tps_number",
+  "tvq_number",
+  "delivery_delay",
 ] as const;
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -38,7 +42,11 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const form = await request.formData();
 
   for (const key of FIELDS) {
-    const value = ((form.get(key) as string) ?? "").trim();
+    // Checkbox non cochée = absente du formulaire → "0"
+    const raw = form.get(key);
+    const value = key === "taxes_enabled"
+      ? (raw === "1" ? "1" : "0")
+      : ((raw as string) ?? "").trim();
     await db
       .prepare(
         "INSERT OR REPLACE INTO site_settings (key, value, updated_at) VALUES (?, ?, datetime('now'))"
@@ -187,6 +195,55 @@ export default function AdminParametres() {
               value={settings.footer_note ?? ""}
               placeholder="Texte affiché en bas de page"
               textarea
+            />
+          </div>
+        </Section>
+
+        <Section title="Taxes de vente (TPS/TVQ)" icon="receipt">
+          <div className="sm:col-span-2">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="taxes_enabled"
+                value="1"
+                defaultChecked={settings.taxes_enabled === "1"}
+                className="mt-0.5 w-4 h-4 accent-primary"
+              />
+              <span>
+                <span className="font-sans text-sm font-semibold text-on-surface block">
+                  Percevoir les taxes de vente
+                </span>
+                <span className="font-sans text-xs text-on-surface-variant">
+                  À activer uniquement quand l'entreprise est inscrite aux fichiers TPS/TVQ
+                  (obligatoire dès 30 000 $ de ventes sur 12 mois). Ne pas percevoir de taxes
+                  sans être inscrit.
+                </span>
+              </span>
+            </label>
+          </div>
+          <Field
+            name="tps_number"
+            label="Numéro TPS"
+            value={settings.tps_number ?? ""}
+            placeholder="123456789 RT0001"
+            hint="Affiché sur les reçus une fois les taxes activées"
+          />
+          <Field
+            name="tvq_number"
+            label="Numéro TVQ"
+            value={settings.tvq_number ?? ""}
+            placeholder="1234567890 TQ0001"
+          />
+        </Section>
+
+        <Section title="Livraison" icon="local_shipping">
+          <div className="sm:col-span-2">
+            <Field
+              name="delivery_delay"
+              label="Délai de livraison affiché"
+              value={settings.delivery_delay ?? "3 à 7 jours ouvrables"}
+              placeholder="3 à 7 jours ouvrables"
+              hint="Obligation légale (LPC) : le délai doit être annoncé avant le paiement."
             />
           </div>
         </Section>

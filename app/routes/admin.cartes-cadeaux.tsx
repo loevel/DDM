@@ -36,11 +36,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const bindings: (string | number)[] = [];
 
   if (filter === "actives") {
-    where += " AND balance_cad > 0 AND (expires_at IS NULL OR expires_at > datetime('now'))";
+    where += " AND balance_cad > 0";
   } else if (filter === "epuisees") {
     where += " AND balance_cad <= 0";
-  } else if (filter === "expirees") {
-    where += " AND expires_at IS NOT NULL AND expires_at <= datetime('now') AND balance_cad > 0";
   }
 
   if (search) {
@@ -56,13 +54,12 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const counts = await db.prepare(`
     SELECT
       COUNT(*) as total,
-      SUM(CASE WHEN balance_cad > 0 AND (expires_at IS NULL OR expires_at > datetime('now')) THEN 1 ELSE 0 END) as actives,
+      SUM(CASE WHEN balance_cad > 0 THEN 1 ELSE 0 END) as actives,
       SUM(CASE WHEN balance_cad <= 0 THEN 1 ELSE 0 END) as epuisees,
-      SUM(CASE WHEN expires_at IS NOT NULL AND expires_at <= datetime('now') AND balance_cad > 0 THEN 1 ELSE 0 END) as expirees,
       SUM(amount_cad) as total_emis,
       SUM(amount_cad - balance_cad) as total_utilise
     FROM gift_cards
-  `).first<{ total: number; actives: number; epuisees: number; expirees: number; total_emis: number; total_utilise: number }>();
+  `).first<{ total: number; actives: number; epuisees: number; total_emis: number; total_utilise: number }>();
 
   return json({ cards: results ?? [], filter, search, counts });
 }
@@ -83,14 +80,15 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const recipientName = String(f.get("recipient_name") ?? "").trim() || null;
     const recipientEmail = String(f.get("recipient_email") ?? "").trim() || null;
     const note = String(f.get("note") ?? "").trim() || null;
-    const expiresAt = String(f.get("expires_at") ?? "").trim() || null;
 
     const existing = await db.prepare("SELECT id FROM gift_cards WHERE code = ?").bind(code).first();
     if (existing) return json({ error: "Ce code existe déjà. Choisissez-en un autre." }, { status: 400 });
 
+    // Pas de date d'expiration : la LPC (art. 187.3) interdit l'expiration
+    // des cartes prépayées au Québec.
     await db.prepare(
-      "INSERT INTO gift_cards (code, amount_cad, balance_cad, recipient_name, recipient_email, note, expires_at) VALUES (?,?,?,?,?,?,?)"
-    ).bind(code, amount, amount, recipientName, recipientEmail, note, expiresAt).run();
+      "INSERT INTO gift_cards (code, amount_cad, balance_cad, recipient_name, recipient_email, note, expires_at) VALUES (?,?,?,?,?,?,NULL)"
+    ).bind(code, amount, amount, recipientName, recipientEmail, note).run();
 
     return json({ ok: true, code });
   }
@@ -125,7 +123,6 @@ export default function AdminCartesCadeaux() {
     { key: "toutes",   label: `Toutes (${counts?.total ?? 0})` },
     { key: "actives",  label: `Actives (${counts?.actives ?? 0})` },
     { key: "epuisees", label: `Épuisées (${counts?.epuisees ?? 0})` },
-    { key: "expirees", label: `Expirées (${counts?.expirees ?? 0})` },
   ];
 
   return (
@@ -198,20 +195,14 @@ function CardRow({ card, isOpen, onToggle }: { card: GiftCard; isOpen: boolean; 
   const fetcher = useFetcher<{ ok?: boolean; error?: string }>();
   const [newBalance, setNewBalance] = useState(String(card.balance_cad.toFixed(2)));
 
-  const isExpired = card.expires_at && new Date(card.expires_at) < new Date();
   const isEmpty = card.balance_cad <= 0;
   const pctUsed = card.amount_cad > 0 ? ((card.amount_cad - card.balance_cad) / card.amount_cad) * 100 : 0;
 
-  const statusColor = isEmpty
-    ? "text-on-surface-variant"
-    : isExpired
-    ? "text-error"
-    : "text-secondary";
-
-  const statusLabel = isEmpty ? "Épuisée" : isExpired ? "Expirée" : "Active";
+  const statusColor = isEmpty ? "text-on-surface-variant" : "text-secondary";
+  const statusLabel = isEmpty ? "Épuisée" : "Active";
 
   return (
-    <div className={`bg-surface border rounded-lg overflow-hidden ${isExpired && !isEmpty ? "border-error/30" : isEmpty ? "border-outline-variant/20" : "border-outline-variant/40"}`}>
+    <div className={`bg-surface border rounded-lg overflow-hidden ${isEmpty ? "border-outline-variant/20" : "border-outline-variant/40"}`}>
       {/* Ligne résumé */}
       <button onClick={onToggle} className="w-full flex items-center gap-4 px-4 py-3 text-left hover:bg-surface-container-low transition-colors">
         {/* Code */}
@@ -253,7 +244,6 @@ function CardRow({ card, isOpen, onToggle }: { card: GiftCard; isOpen: boolean; 
             <Detail label="Solde restant" value={`${card.balance_cad.toFixed(2)} $ CAD`} highlight />
             <Detail label="Destinataire" value={card.recipient_name ?? "—"} />
             <Detail label="Email" value={card.recipient_email ?? "—"} />
-            <Detail label="Expiration" value={card.expires_at ? new Date(card.expires_at).toLocaleDateString("fr-CA") : "Aucune"} />
             <Detail label="Créée le" value={new Date(card.created_at).toLocaleDateString("fr-CA")} />
             {card.note && <div className="col-span-2 md:col-span-4"><Detail label="Note" value={card.note} /></div>}
           </div>
@@ -413,15 +403,6 @@ function CreateModal({ onClose }: { onClose: () => void }) {
                   Email destinataire
                 </label>
                 <input type="email" name="recipient_email" placeholder="marie@exemple.com"
-                  className="w-full h-10 px-3 border border-outline-variant bg-surface text-sm text-on-surface focus:outline-none focus:border-primary" />
-              </div>
-
-              <div className="col-span-2">
-                <label className="font-sans text-xs font-bold uppercase tracking-wider text-on-surface-variant block mb-1.5">
-                  Date d'expiration (facultatif)
-                </label>
-                <input type="date" name="expires_at"
-                  min={new Date().toISOString().split("T")[0]}
                   className="w-full h-10 px-3 border border-outline-variant bg-surface text-sm text-on-surface focus:outline-none focus:border-primary" />
               </div>
 

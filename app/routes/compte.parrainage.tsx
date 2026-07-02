@@ -75,10 +75,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // Crée un code promo unique lié à ce client
     const promoCode = `CREDIT-${(customer as any).referral_code}-${Date.now().toString(36).toUpperCase()}`;
     await db.prepare(
-      "INSERT INTO promo_codes (code, type, value, min_order_cad, max_uses, used_count, active, expires_at, description) VALUES (?,?,?,?,?,?,?,?,?)"
+      "INSERT INTO promo_codes (code, type, value, min_order, usage_limit, used_count, active, expires_at) VALUES (?,?,?,?,?,?,?,?)"
     ).bind(promoCode, "fixed", amount, 0, 1, 0, 1,
-      new Date(Date.now() + 30 * 86400000).toISOString(),
-      `Crédit parrainage — ${customer.email}`
+      new Date(Date.now() + 30 * 86400000).toISOString()
     ).run();
     await db.prepare("UPDATE customers SET referral_credit_cad = referral_credit_cad - ? WHERE id = ?")
       .bind(amount, customerId).run();

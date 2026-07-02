@@ -34,7 +34,24 @@ export async function loader({ context }: LoaderFunctionArgs) {
       .all<{ day: string; revenue: number; orders: number }>(),
   ]);
 
-  return json({ orderStats, todayOrders, recentOrders: recentOrders.results, lowStock: lowStock.results, topCustomers: topCustomers.results, revenueChart: revenueChart.results ?? [] });
+  // Surveillance du seuil TPS/TVQ : CA taxable sur 12 mois glissants
+  // (inscription obligatoire dès 30 000 $ — alerte à partir de 25 000 $)
+  let taxThresholdAlert: { revenue12m: number } | null = null;
+  try {
+    const [rev12m, taxSetting] = await Promise.all([
+      db.prepare(`SELECT COALESCE(SUM(total_cad), 0) as revenue FROM orders
+        WHERE payment_status = 'paid' AND created_at >= datetime('now', '-12 months')`)
+        .first<{ revenue: number }>(),
+      db.prepare("SELECT value FROM site_settings WHERE key = 'taxes_enabled'")
+        .first<{ value: string }>(),
+    ]);
+    const taxesEnabled = taxSetting?.value === "1";
+    if (!taxesEnabled && (rev12m?.revenue ?? 0) >= 25000) {
+      taxThresholdAlert = { revenue12m: rev12m!.revenue };
+    }
+  } catch { /* table site_settings absente */ }
+
+  return json({ orderStats, todayOrders, recentOrders: recentOrders.results, lowStock: lowStock.results, topCustomers: topCustomers.results, revenueChart: revenueChart.results ?? [], taxThresholdAlert });
 }
 
 const STATUS_COLOR: Record<string, string> = {
@@ -104,11 +121,27 @@ function RevenueChart({ data }: { data: { day: string; revenue: number; orders: 
 }
 
 export default function AdminDashboard() {
-  const { orderStats, todayOrders, recentOrders, lowStock, topCustomers, revenueChart } = useLoaderData<typeof loader>();
+  const { orderStats, todayOrders, recentOrders, lowStock, topCustomers, revenueChart, taxThresholdAlert } = useLoaderData<typeof loader>();
 
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold text-on-surface mb-8">Dashboard</h1>
+
+      {taxThresholdAlert && (
+        <div className="mb-8 flex items-start gap-3 p-4 bg-yellow-50 border border-yellow-400 rounded">
+          <span className="material-symbols-outlined text-yellow-600 shrink-0">warning</span>
+          <div>
+            <p className="font-semibold text-yellow-900 text-sm">
+              Seuil TPS/TVQ en approche — CA 12 derniers mois : {taxThresholdAlert.revenue12m.toFixed(0)} $
+            </p>
+            <p className="text-yellow-800 text-xs mt-1">
+              L'inscription aux fichiers TPS/TVQ devient obligatoire à 30 000 $ de ventes sur 4 trimestres
+              consécutifs. Contactez Revenu Québec (1 800 567-4692) ou votre comptable, puis activez les
+              taxes dans <a href="/admin/parametres" className="underline font-semibold">Paramètres</a>.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* KPI row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

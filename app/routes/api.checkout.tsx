@@ -1,6 +1,7 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import Stripe from "stripe";
+import { computeTaxes, getTaxSettings } from "~/lib/taxes.server";
 
 // POST /api/checkout  { cartId, customerInfo, promoCode? }
 //   → { clientSecret, orderRef }
@@ -74,16 +75,27 @@ export async function action({ request, context }: ActionFunctionArgs) {
   let validPromo: string | null = null;
   if (promoCode) {
     const promo = await db
-      .prepare("SELECT * FROM promo_codes WHERE code = ? AND active = 1 AND (expires_at IS NULL OR expires_at > datetime('now'))")
+      .prepare(`SELECT type, value, min_order FROM promo_codes
+        WHERE code = ? AND active = 1
+        AND (expires_at IS NULL OR expires_at > datetime('now'))
+        AND (usage_limit IS NULL OR used_count < usage_limit)`)
       .bind(promoCode.trim().toUpperCase())
-      .first<{ type: string; value: number; min_order_cad: number | null }>();
+      .first<{ type: string; value: number; min_order: number }>();
 
-    if (promo && (!promo.min_order_cad || subtotal >= promo.min_order_cad)) {
-      discountCad = promo.type === "percent"
-        ? Math.round((subtotal * promo.value / 100) * 100) / 100
-        : Math.min(promo.value, subtotal);
-      validPromo = promoCode.trim().toUpperCase();
+    if (!promo) {
+      return json({ error: "Code promo invalide, expiré ou épuisé." }, { status: 400 });
     }
+    if (promo.min_order > 0 && subtotal < promo.min_order) {
+      return json(
+        { error: `Ce code exige un minimum de ${promo.min_order.toFixed(2)} $ d'achat.` },
+        { status: 400 }
+      );
+    }
+
+    discountCad = promo.type === "percent"
+      ? Math.round((subtotal * promo.value / 100) * 100) / 100
+      : Math.min(promo.value, subtotal);
+    validPromo = promoCode.trim().toUpperCase();
   }
 
   // Vérifier le code de parrainage (nouvelle cliente uniquement)
@@ -102,7 +114,14 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } catch { /* table pas encore dispo */ }
   }
 
-  const totalCad = Math.max(0, subtotal - discountCad);
+  // Taxes de vente — actives seulement si l'entreprise est inscrite (Admin → Paramètres)
+  const taxableCad = Math.max(0, subtotal - discountCad);
+  const taxSettings = await getTaxSettings(db);
+  const taxes = taxSettings.enabled
+    ? computeTaxes(taxableCad, customerInfo.province ?? "QC")
+    : { tps: 0, tvq: 0, tpsLabel: "", tvqLabel: null };
+
+  const totalCad = Math.round((taxableCad + taxes.tps + taxes.tvq) * 100) / 100;
   const amountCents = Math.round(totalCad * 100);
 
   if (amountCents < 50) return json({ error: "Montant minimum : 0.50 $." }, { status: 400 });
@@ -114,9 +133,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const order = await db
     .prepare(`INSERT INTO orders
       (reference, customer_name, customer_email, customer_phone, type,
-       total_cad, discount_cad, promo_code, payment_status, status,
+       total_cad, discount_cad, tps_cad, tvq_cad, promo_code, payment_status, status,
        shipping_address)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?) RETURNING id`)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`)
     .bind(
       ref,
       customerInfo.name.trim(),
@@ -125,6 +144,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
       "purchase",
       totalCad,
       discountCad,
+      taxes.tps,
+      taxes.tvq,
       validPromo,
       "pending",
       "pending",
@@ -183,5 +204,17 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } catch { /* ignorer silencieusement */ }
   }
 
-  return json({ clientSecret: paymentIntent.client_secret, orderRef: ref });
+  return json({
+    clientSecret: paymentIntent.client_secret,
+    orderRef: ref,
+    breakdown: {
+      subtotal: Math.round(subtotal * 100) / 100,
+      discount: discountCad,
+      taxes: [
+        ...(taxes.tps > 0 ? [{ label: taxes.tpsLabel, amount: taxes.tps }] : []),
+        ...(taxes.tvq > 0 && taxes.tvqLabel ? [{ label: taxes.tvqLabel, amount: taxes.tvq }] : []),
+      ],
+      total: totalCad,
+    },
+  });
 }
