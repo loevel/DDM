@@ -35,7 +35,7 @@ export async function destroyAdminSession(
 }
 
 export const setAdminCookie = (sid: string) =>
-  `${COOKIE}=${sid}; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=${TTL}`;
+  `${COOKIE}=${sid}; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=${TTL}`;
 
 export const clearAdminCookie = () =>
-  `${COOKIE}=; Path=/admin; HttpOnly; SameSite=Strict; Max-Age=0`;
+  `${COOKIE}=; Path=/admin; HttpOnly; Secure; SameSite=Strict; Max-Age=0`;
