@@ -1,17 +1,33 @@
-import type { ActionFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { json } from "@remix-run/cloudflare";
-import { Form, Link, useActionData } from "@remix-run/react";
+import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { getDB } from "~/lib/db.server";
 import { contactNotificationEmail, sendEmail } from "~/lib/email.server";
+import { verifyTurnstile } from "~/lib/turnstile.server";
 
 export const meta: MetaFunction = () => [
   { title: "Nous Contacter — DDM Wigs & More" },
   { name: "description", content: "Contactez notre équipe d'experts pour une consultation personnalisée. Nous sommes à votre disposition pour vous accompagner dans le choix de votre chevelure idéale." },
 ];
 
+export async function loader({ context }: LoaderFunctionArgs) {
+  const siteKey = (context.cloudflare.env as any).TURNSTILE_SITE_KEY as string | undefined;
+  return json({ siteKey: siteKey ?? null });
+}
+
 export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
+
+  const tsSecret = (context.cloudflare.env as any).TURNSTILE_SECRET as string | undefined;
+  if (tsSecret) {
+    const token = formData.get("cf-turnstile-response") as string | null;
+    const ok = await verifyTurnstile(token, tsSecret);
+    if (!ok) {
+      return json({ success: false, error: "Vérification de sécurité échouée. Veuillez réessayer." });
+    }
+  }
+
   const nom     = String(formData.get("nom")     ?? "").trim();
   const email   = String(formData.get("email")   ?? "").trim();
   const tel     = String(formData.get("tel")     ?? "").trim();
@@ -66,11 +82,15 @@ const FLOAT_LABEL =
   `${LABEL_BASE} peer-focus:${LABEL_UP} peer-[&:not(:placeholder-shown)]:${LABEL_UP}`;
 
 export default function Contact() {
+  const { siteKey } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const [sujet, setSujet] = useState("");
 
   return (
     <main className="pt-20">
+      {siteKey && (
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      )}
 
       {/* Hero */}
       <section className="relative h-[520px] flex items-center justify-center overflow-hidden">
@@ -299,6 +319,9 @@ export default function Contact() {
                       </label>
                     </div>
 
+                    {siteKey && (
+                      <div className="cf-turnstile" data-sitekey={siteKey} />
+                    )}
                     <button
                       type="submit"
                       className="w-full bg-primary text-on-primary font-sans text-sm font-bold py-4 px-8 uppercase tracking-widest hover:opacity-90 active:scale-[0.98] transition-all duration-200 mt-2 flex items-center justify-center gap-2 group"
