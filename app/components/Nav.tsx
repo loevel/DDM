@@ -39,7 +39,7 @@ function useHoverMenu() {
 }
 
 const triggerClass = (active: boolean) =>
-  `font-sans text-sm font-semibold tracking-widest uppercase transition-colors duration-300 flex items-center gap-1 ${
+  `font-sans text-sm font-semibold tracking-widest uppercase transition-colors duration-300 flex items-center gap-1 whitespace-nowrap ${
     active
       ? "text-primary border-b-2 border-primary pb-1"
       : "text-on-surface-variant hover:text-primary"
