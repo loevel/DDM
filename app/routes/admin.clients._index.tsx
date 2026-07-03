@@ -1,6 +1,7 @@
 import { json } from "@remix-run/cloudflare";
-import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
-import { Link, useLoaderData, useSearchParams } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
+import { Form, Link, useActionData, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
+import { requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Clients — Admin DDM" }];
 
@@ -64,6 +65,72 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     tab, search, segment,
     kpis: { totalClients, ltv, vipCount, unread },
   });
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+export async function action({ request, context }: ActionFunctionArgs) {
+  const admin = await requireAdmin(request, context);
+  const db = context.cloudflare.env.DB;
+  const form = await request.formData();
+  const intent = String(form.get("intent") ?? "");
+  const messageId = Number(form.get("message_id") ?? 0);
+
+  if (!messageId) return json({ error: "Message introuvable.", messageId: 0 });
+
+  if (intent === "mark_read") {
+    await db.prepare("UPDATE contact_messages SET read_at = ? WHERE id = ?")
+      .bind(new Date().toISOString(), messageId).run();
+    return json({ ok: true, messageId });
+  }
+
+  if (intent === "reply") {
+    const replyText = String(form.get("reply") ?? "").trim();
+    if (!replyText) return json({ error: "La réponse est vide.", messageId });
+
+    const msg = await db.prepare("SELECT * FROM contact_messages WHERE id = ?")
+      .bind(messageId).first<any>();
+    if (!msg) return json({ error: "Message introuvable.", messageId });
+
+    const resendKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
+    if (!resendKey) return json({ error: "RESEND_API_KEY manquante — email non envoyé.", messageId });
+
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: "DDM Wigs & More <noreply@ddmwigs.com>",
+        to: [msg.email],
+        reply_to: admin.email,
+        subject: `Re: ${msg.sujet || "Votre message"} — DDM Wigs & More`,
+        html: `
+          <div style="font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;background:#fcf9f8">
+            <p style="font-size:22px;font-weight:800;color:#7d562d;letter-spacing:0.05em;margin-bottom:4px">DDM WIGS & MORE</p>
+            <hr style="border:none;border-top:1px solid #d4c4b7;margin:16px 0 32px">
+            <p style="font-size:16px;color:#1b1c1c;margin-bottom:8px">Bonjour ${escapeHtml(msg.nom)},</p>
+            <p style="font-size:15px;color:#50453b;line-height:1.6;white-space:pre-wrap">${escapeHtml(replyText)}</p>
+            <p style="font-size:12px;color:#82756a;margin-top:40px;line-height:1.6;border-left:3px solid #d4c4b7;padding-left:12px">
+              Votre message :<br>${escapeHtml(msg.message)}
+            </p>
+          </div>`,
+      }),
+    });
+
+    if (!res.ok) {
+      console.error("[Admin] Envoi réponse échoué:", res.status, await res.text());
+      return json({ error: "L'envoi de l'email a échoué. Réessayez.", messageId });
+    }
+
+    await db.prepare(
+      "UPDATE contact_messages SET replied_at = ?, reply_text = ?, read_at = COALESCE(read_at, ?) WHERE id = ?"
+    ).bind(new Date().toISOString(), replyText, new Date().toISOString(), messageId).run();
+
+    return json({ ok: true, replied: true, messageId });
+  }
+
+  return json({ error: "Action inconnue.", messageId });
 }
 
 const SEGMENT_LABELS: Record<string, { label: string; color: string }> = {
@@ -233,24 +300,75 @@ export default function AdminClients() {
       {tab === "messages" && (
         <div className="space-y-3">
           {(messages as any[]).length === 0 && <p className="text-on-surface-variant">Aucun message reçu.</p>}
-          {(messages as any[]).map((m: any) => (
-            <div key={m.id} className={`bg-surface border rounded p-5 ${m.read_at ? "border-outline-variant/20 opacity-70" : "border-primary/30"}`}>
-              <div className="flex items-start justify-between gap-4 mb-3">
-                <div>
-                  <p className="font-semibold text-on-surface">
-                    {m.nom}
-                    {!m.read_at && <span className="ml-2 text-[10px] font-bold uppercase bg-primary text-on-primary px-1.5 py-0.5">Nouveau</span>}
-                    <span className="font-normal text-on-surface-variant text-sm"> — {m.email}</span>
-                  </p>
-                  {m.sujet && <p className="text-xs text-primary uppercase tracking-wider mt-0.5">{m.sujet}</p>}
-                </div>
-                <p className="text-xs text-on-surface-variant shrink-0">{new Date(m.created_at).toLocaleDateString("fr-CA")}</p>
-              </div>
-              <p className="text-sm text-on-surface-variant leading-relaxed">{m.message}</p>
-              {m.tel && <p className="text-xs text-on-surface-variant mt-2">Tél : {m.tel}</p>}
-            </div>
-          ))}
+          {(messages as any[]).map((m: any) => <MessageCard key={m.id} m={m} />)}
         </div>
+      )}
+    </div>
+  );
+}
+
+function MessageCard({ m }: { m: any }) {
+  const nav = useNavigation();
+  const actionData = useActionData<typeof action>();
+  const error = actionData && "error" in actionData && actionData.messageId === m.id ? actionData.error : null;
+  const submitting =
+    nav.state === "submitting" && nav.formData?.get("message_id") === String(m.id);
+  const replyIntent = submitting && nav.formData?.get("intent") === "reply";
+
+  return (
+    <div className={`bg-surface border rounded p-5 ${m.read_at ? "border-outline-variant/20" : "border-primary/30"}`}>
+      <div className="flex items-start justify-between gap-4 mb-3">
+        <div>
+          <p className="font-semibold text-on-surface">
+            {m.nom}
+            {!m.read_at && <span className="ml-2 text-[10px] font-bold uppercase bg-primary text-on-primary px-1.5 py-0.5">Nouveau</span>}
+            {m.replied_at && <span className="ml-2 text-[10px] font-bold uppercase bg-green-100 text-green-700 border border-green-200 px-1.5 py-0.5">Répondu</span>}
+            <span className="font-normal text-on-surface-variant text-sm"> — {m.email}</span>
+          </p>
+          {m.sujet && <p className="text-xs text-primary uppercase tracking-wider mt-0.5">{m.sujet}</p>}
+        </div>
+        <div className="flex items-center gap-3 shrink-0">
+          <p className="text-xs text-on-surface-variant">{new Date(m.created_at).toLocaleDateString("fr-CA")}</p>
+          {!m.read_at && (
+            <Form method="post">
+              <input type="hidden" name="intent" value="mark_read" />
+              <input type="hidden" name="message_id" value={m.id} />
+              <button type="submit" disabled={submitting}
+                className="text-xs text-on-surface-variant hover:text-primary underline underline-offset-2 disabled:opacity-50">
+                Marquer lu
+              </button>
+            </Form>
+          )}
+        </div>
+      </div>
+      <p className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap">{m.message}</p>
+      {m.tel && <p className="text-xs text-on-surface-variant mt-2">Tél : {m.tel}</p>}
+
+      {m.replied_at ? (
+        <div className="mt-4 border-l-2 border-green-300 pl-4">
+          <p className="text-xs text-on-surface-variant uppercase tracking-wider mb-1">
+            Votre réponse — {new Date(m.replied_at).toLocaleDateString("fr-CA")}
+          </p>
+          <p className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap">{m.reply_text}</p>
+        </div>
+      ) : (
+        <Form method="post" className="mt-4 flex flex-col gap-2">
+          {error && <p className="text-xs text-error bg-error-container/40 p-2 rounded-sm">{error}</p>}
+          <input type="hidden" name="intent" value="reply" />
+          <input type="hidden" name="message_id" value={m.id} />
+          <textarea
+            name="reply"
+            rows={3}
+            required
+            placeholder={`Répondre à ${m.nom}…`}
+            className="w-full text-sm border border-outline-variant/40 bg-transparent p-3 focus:outline-none focus:border-primary rounded-sm resize-y"
+          />
+          <button type="submit" disabled={submitting}
+            className="self-end flex items-center gap-1.5 bg-primary text-on-primary text-xs font-semibold uppercase tracking-wider px-4 py-2 hover:bg-on-primary-container transition-colors disabled:opacity-60">
+            <span className="material-symbols-outlined text-sm">send</span>
+            {replyIntent ? "Envoi…" : "Envoyer la réponse"}
+          </button>
+        </Form>
       )}
     </div>
   );
