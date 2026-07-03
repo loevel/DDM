@@ -146,6 +146,18 @@ export const DEFAULT_TEMPLATES: Record<string, EmailTemplate & { label: string; 
     subject: "{produit} est de retour en stock ! 🎉",
     body: "Bonjour {prenom} 🎉\nBonne nouvelle — le produit que vous avez ajouté à vos favoris est de nouveau disponible :",
   },
+  demande_avis: {
+    label: "Demande d'avis (12 jours après livraison)",
+    variables: ["{prenom}", "{produit}"],
+    subject: "Comment trouvez-vous {produit} ? 💛",
+    body: "Bonjour {prenom} 👋\nVous profitez de votre {produit} depuis quelques semaines — nous serions ravies de connaître votre expérience !\nEn remerciement, vous recevrez un code -10% sur votre prochaine commande dès la publication de votre avis.",
+  },
+  merci_avis: {
+    label: "Merci pour votre avis (avec code -10 %)",
+    variables: ["{prenom}", "{code}"],
+    subject: "Merci pour votre avis — voici votre -10% 🎁",
+    body: "Bonjour {prenom} 💛\nMerci d'avoir partagé votre avis ! Voici votre code de remerciement, valable 60 jours sur toute la boutique.",
+  },
 };
 
 /** Charge un template : surcharge en base si elle existe, sinon défaut du code. */
@@ -324,6 +336,49 @@ export async function cartReminderEmail(
       cta: { label: CTAS[opts.num - 1], url: `${SITE_URL}/panier` },
       note: `${NOTES[opts.num - 1]}<br>Une question ? Écrivez-nous sur <a href="https://wa.me/23797193723" style="color:#c9a87c;text-decoration:none;">WhatsApp</a>`,
       footerReason: "Vous recevez cet email car vous avez commencé une commande sur ddmwigs.com.",
+    }),
+  };
+}
+
+export async function reviewRequestEmail(
+  db: D1Database,
+  opts: { prenom: string; productName: string; slug: string }
+): Promise<{ subject: string; html: string }> {
+  const tpl = await getTemplate(db, "demande_avis");
+  const vars = { prenom: opts.prenom || "", produit: opts.productName };
+  return {
+    subject: fillTemplate(tpl.subject, vars),
+    html: emailLayout({
+      eyebrow: "Votre avis compte",
+      title: "Partagez votre expérience",
+      content: bodyToHtml(fillTemplate(tpl.body, vars)),
+      cta: { label: "Laisser mon avis →", url: `${SITE_URL}/boutique/${opts.slug}#avis` },
+      note: "Deux minutes suffisent — votre avis aide d'autres clientes à choisir.",
+      footerReason: "Vous recevez cet email suite à votre commande sur ddmwigs.com.",
+    }),
+  };
+}
+
+export async function reviewRewardEmail(
+  db: D1Database,
+  opts: { prenom: string; code: string }
+): Promise<{ subject: string; html: string }> {
+  const tpl = await getTemplate(db, "merci_avis");
+  const vars = { prenom: opts.prenom || "", code: opts.code };
+  return {
+    subject: fillTemplate(tpl.subject, vars),
+    html: emailLayout({
+      eyebrow: "Merci",
+      title: "Votre code de remerciement",
+      content:
+        bodyToHtml(fillTemplate(tpl.body, vars)) +
+        `<div style="background:#fdf6f0;border:2px dashed #c9a87c;border-radius:4px;padding:16px 20px;margin:20px 0;text-align:center;">
+          <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:11px;color:#9b8b7a;text-transform:uppercase;letter-spacing:2px;">Votre code</p>
+          <p style="margin:0 0 4px;font-family:Georgia,serif;font-size:26px;font-weight:bold;color:#c9a87c;letter-spacing:4px;">${escapeHtml(opts.code)}</p>
+          <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#9b8b7a;">-10% sur votre prochaine commande · Valable 60 jours</p>
+        </div>`,
+      cta: { label: "Découvrir la boutique →", url: `${SITE_URL}/boutique` },
+      footerReason: "Vous recevez cet email car vous avez publié un avis sur ddmwigs.com.",
     }),
   };
 }

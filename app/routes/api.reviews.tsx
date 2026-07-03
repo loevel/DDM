@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/cloudfla
 import { getDB } from "~/lib/db.server";
 import { getCustomerId } from "~/lib/session.server";
 import { getCustomer } from "~/lib/auth.server";
+import { reviewRewardEmail, sendEmail } from "~/lib/email.server";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -88,6 +89,34 @@ export async function action({ request, context }: ActionFunctionArgs) {
     .prepare("INSERT INTO reviews (product_id, customer_name, customer_email, rating, body, photos, verified_purchase, approved) VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
     .bind(productId, customer.name?.trim() || customer.email.split("@")[0], customer.email, rating, (reviewBody ?? "").trim().slice(0, 1000) || null, photosJson, verifiedPurchase, approved)
     .run();
+
+  // Récompense : code -10 % (usage unique, 60 jours) après tout avis vérifié,
+  // peu importe la note — offrir la récompense seulement pour les avis positifs
+  // serait une pratique trompeuse (Loi sur la concurrence).
+  if (verifiedPurchase) {
+    try {
+      const code = "MERCI" + Math.random().toString(36).slice(2, 6).toUpperCase();
+      const exp = new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
+      await db
+        .prepare("INSERT INTO promo_codes (code, type, value, min_order, usage_limit, active, expires_at) VALUES (?, 'percent', 10, 0, 1, 1, ?)")
+        .bind(code, exp)
+        .run();
+      await db
+        .prepare("UPDATE reviews SET reward_code = ? WHERE product_id = ? AND customer_email = ?")
+        .bind(code, productId, customer.email)
+        .run();
+
+      const apiKey = (context as any).cloudflare.env.RESEND_API_KEY as string | undefined;
+      if (apiKey) {
+        const prenom = (customer.name ?? "").split(" ")[0];
+        const { subject, html } = await reviewRewardEmail(db, { prenom, code });
+        await sendEmail({ apiKey, to: customer.email, subject, html });
+      }
+    } catch (e) {
+      // La récompense ne doit jamais bloquer la publication de l'avis
+      console.error("[Reviews] Récompense échouée:", e);
+    }
+  }
 
   return json({ success: true, verified: verifiedPurchase === 1 });
 }
