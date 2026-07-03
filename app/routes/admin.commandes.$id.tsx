@@ -69,8 +69,9 @@ export async function action({ params, request, context }: ActionFunctionArgs) {
       .bind(params.id).first<OrderRow>();
     if (!order) throw new Response("Commande introuvable", { status: 404 });
 
-    await db.prepare("UPDATE orders SET status = ? WHERE id = ?")
-      .bind(newStatus, params.id).run();
+    await db.prepare(
+      "UPDATE orders SET status = ?, delivered_at = CASE WHEN ? = 'delivered' THEN COALESCE(delivered_at, datetime('now')) ELSE delivered_at END WHERE id = ?"
+    ).bind(newStatus, newStatus, params.id).run();
     await logAdminAction(context, {
       admin, action: "order.update_status", entity: "order", entityId: order.reference,
       details: { status: newStatus }, request,

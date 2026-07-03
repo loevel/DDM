@@ -1176,7 +1176,7 @@ function ReviewsSection({ productId, productSlug, reviews, stats, currentCustome
                 <p className="font-sans text-sm font-semibold text-on-surface">Merci pour votre avis !</p>
                 <p className="font-sans text-sm text-on-surface-variant">
                   {submitState === "success"
-                    ? "Votre avis vérifié est maintenant visible."
+                    ? "Votre avis vérifié est maintenant visible. Un code -10% de remerciement vous a été envoyé par courriel 🎁"
                     : "Il sera visible après validation par notre équipe."}
                 </p>
               </div>

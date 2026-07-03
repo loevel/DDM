@@ -10,22 +10,25 @@ export default {
       console.error("[mailer] CRON_SECRET manquant");
       return;
     }
-    try {
-      const res = await fetch(`${PAGES_URL}/api/send-cart-reminders`, {
-        method: "POST",
-        headers: {
-          "x-cron-secret": env.CRON_SECRET,
-          "Content-Type": "application/json",
-        },
-      });
-      const body = await res.json() as { sent?: number; errors?: number; error?: string };
-      if (!res.ok) {
-        console.error(`[mailer] Erreur ${res.status}:`, body.error ?? "inconnue");
-      } else {
-        console.log(`[mailer] OK — ${body.sent ?? 0} envoyé(s), ${body.errors ?? 0} erreur(s)`);
+    const endpoints = ["/api/send-cart-reminders", "/api/send-review-requests"];
+    for (const path of endpoints) {
+      try {
+        const res = await fetch(`${PAGES_URL}${path}`, {
+          method: "POST",
+          headers: {
+            "x-cron-secret": env.CRON_SECRET,
+            "Content-Type": "application/json",
+          },
+        });
+        const body = await res.json() as { sent?: number; errors?: number; error?: string };
+        if (!res.ok) {
+          console.error(`[mailer] ${path} — Erreur ${res.status}:`, body.error ?? "inconnue");
+        } else {
+          console.log(`[mailer] ${path} — OK, ${body.sent ?? 0} envoyé(s), ${body.errors ?? 0} erreur(s)`);
+        }
+      } catch (err) {
+        console.error(`[mailer] ${path} — Fetch échoué:`, err);
       }
-    } catch (err) {
-      console.error("[mailer] Fetch échoué:", err);
     }
   },
 

@@ -45,8 +45,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const db = context.cloudflare.env.DB;
   const resendKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
 
-  await db.prepare("UPDATE orders SET status = ? WHERE reference = ?")
-    .bind(newStatus, ref).run();
+  await db.prepare(
+    "UPDATE orders SET status = ?, delivered_at = CASE WHEN ? = 'delivered' THEN COALESCE(delivered_at, datetime('now')) ELSE delivered_at END WHERE reference = ?"
+  ).bind(newStatus, newStatus, ref).run();
 
   if (resendKey) {
     const order = await db.prepare("SELECT customer_name, customer_email FROM orders WHERE reference = ?")

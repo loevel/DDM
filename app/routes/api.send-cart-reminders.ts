@@ -27,8 +27,8 @@ async function ensurePromo(db: D1Database, id: number, existing: string | null):
   const code = "RETOUR" + Math.random().toString(36).slice(2, 6).toUpperCase();
   const exp = new Date(Date.now() + 72 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
   try {
-    await db.prepare("INSERT INTO promo_codes (code,type,value,active,expires_at,min_order_cad) VALUES (?,'percent',10,1,?,0)").bind(code, exp).run();
-  } catch { /* doublon */ }
+    await db.prepare("INSERT INTO promo_codes (code,type,value,active,expires_at,min_order) VALUES (?,'percent',10,1,?,0)").bind(code, exp).run();
+  } catch (e) { console.error("[Reminders] Création code promo échouée:", e); }
   await db.prepare("UPDATE abandoned_carts SET recovery_promo_code=? WHERE id=?").bind(code, id).run();
   return code;
 }
