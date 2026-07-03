@@ -1,4 +1,5 @@
 import type { AppLoadContext } from "@remix-run/cloudflare";
+import { redirect } from "@remix-run/cloudflare";
 
 const COOKIE = "ddm_admin";
 const TTL = 60 * 60 * 8; // 8 heures
@@ -148,6 +149,22 @@ export async function isAdminAuthenticated(
   context: AppLoadContext
 ): Promise<boolean> {
   return (await getAdminUser(request, context)) !== null;
+}
+
+/**
+ * Garde d'authentification pour les `action` admin.
+ * Indispensable : dans Remix, l'action de la route enfant s'exécute AVANT
+ * le loader du layout parent (admin.tsx) — la protection du parent ne couvre
+ * donc PAS les mutations. Chaque action admin doit appeler ce garde.
+ * Renvoie l'admin authentifié, ou lève une redirection vers la connexion.
+ */
+export async function requireAdmin(
+  request: Request,
+  context: AppLoadContext
+): Promise<AdminSessionUser> {
+  const admin = await getAdminUser(request, context);
+  if (!admin) throw redirect("/admin/connexion");
+  return admin;
 }
 
 export async function createAdminSession(

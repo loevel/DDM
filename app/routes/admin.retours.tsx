@@ -2,6 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
+import { requireAdmin } from "~/lib/admin-session.server";
 
 async function sendStockAlertEmail(apiKey: string, to: string, prenom: string, productName: string, slug: string): Promise<void> {
   const name = prenom ? ` ${prenom}` : "";
@@ -90,6 +91,7 @@ export async function loader({ context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  await requireAdmin(request, context);
   const f = await request.formData();
   const g = (k: string) => String(f.get(k) ?? "").trim();
   const n = (k: string) => { const v = g(k); return v ? Number(v) : null; };

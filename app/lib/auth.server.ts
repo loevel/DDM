@@ -4,11 +4,59 @@ const TOKEN_TTL_MIN = 15;
 const FROM_ADDRESS = "noreply@ddmwigs.com";
 const FROM_NAME = "DDM Wigs & More";
 
+const MAGIC_MAX = 5;              // tentatives max
+const MAGIC_WINDOW = 60 * 15;     // par fenêtre de 15 min
+
+/**
+ * Rate limit sur l'envoi de magic link : par IP (anti-abus massif) et par
+ * email (anti-harcèlement d'une boîte ciblée). Retourne les secondes de
+ * blocage restantes, ou 0 si autorisé.
+ */
+export async function checkMagicLinkRateLimit(
+  email: string,
+  context: AppLoadContext,
+  request: Request
+): Promise<number> {
+  const cache = context.cloudflare.env.CACHE;
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const keys = [`magic_rl:ip:${ip}`, `magic_rl:email:${email.toLowerCase().trim()}`];
+
+  let maxRemaining = 0;
+  for (const key of keys) {
+    const raw = await cache.get(key);
+    const data = raw ? (JSON.parse(raw) as { count: number; until: number }) : { count: 0, until: 0 };
+    if (data.count >= MAGIC_MAX) {
+      const remaining = Math.ceil((data.until - Date.now()) / 1000);
+      if (remaining > 0) maxRemaining = Math.max(maxRemaining, remaining);
+    }
+  }
+  return maxRemaining;
+}
+
+async function recordMagicLinkAttempt(
+  email: string,
+  context: AppLoadContext,
+  request: Request
+): Promise<void> {
+  const cache = context.cloudflare.env.CACHE;
+  const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+  const keys = [`magic_rl:ip:${ip}`, `magic_rl:email:${email.toLowerCase().trim()}`];
+  for (const key of keys) {
+    const raw = await cache.get(key);
+    const data = raw ? (JSON.parse(raw) as { count: number; until: number }) : { count: 0, until: 0 };
+    data.count += 1;
+    data.until = Date.now() + MAGIC_WINDOW * 1000;
+    await cache.put(key, JSON.stringify(data), { expirationTtl: MAGIC_WINDOW });
+  }
+}
+
 export async function sendMagicLink(
   email: string,
   context: AppLoadContext,
   request: Request
 ): Promise<void> {
+  await recordMagicLinkAttempt(email, context, request);
+
   const db = context.cloudflare.env.DB;
   const token =
     crypto.randomUUID().replace(/-/g, "") +
