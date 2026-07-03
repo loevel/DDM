@@ -15,7 +15,7 @@ export function Footer() {
           <h4 className="font-sans text-sm font-semibold text-on-surface uppercase tracking-widest mb-2">Explorer</h4>
           {[
             ["/boutique", "Boutique Perruques"],
-
+            ["/quiz", "Quiz — Trouver ma perruque"],
             ["/accessoires", "Accessoires"],
             ["/cartes-cadeaux", "Cartes Cadeaux"],
           ].map(([to, label]) => (

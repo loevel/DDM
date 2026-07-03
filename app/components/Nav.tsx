@@ -5,6 +5,7 @@ interface Collection { id: number; name: string; slug: string; }
 
 const links = [
   { to: "/boutique", label: "Boutique" },
+  { to: "/quiz", label: "✨ Trouver ma perruque", highlight: true },
   { to: "/ventes-flash", label: "⚡ Ventes Flash", flash: true },
   { to: "/promotions", label: "Promotions", highlight: true },
   { to: "/accessoires", label: "Accessoires" },
