@@ -3,15 +3,12 @@ import { json } from "@remix-run/cloudflare";
 import { Form, Link, useActionData } from "@remix-run/react";
 import { useState } from "react";
 import { getDB } from "~/lib/db.server";
+import { contactNotificationEmail, sendEmail } from "~/lib/email.server";
 
 export const meta: MetaFunction = () => [
   { title: "Nous Contacter — DDM Wigs & More" },
   { name: "description", content: "Contactez notre équipe d'experts pour une consultation personnalisée. Nous sommes à votre disposition pour vous accompagner dans le choix de votre chevelure idéale." },
 ];
-
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
@@ -44,26 +41,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
       const setting = await db
         .prepare("SELECT value FROM site_settings WHERE key = 'contact_email'")
         .first<{ value: string }>();
-      const to = setting?.value;
-      if (to) {
-        await fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            from: "DDM Wigs & More <noreply@ddmwigs.com>",
-            to: [to],
-            reply_to: email,
-            subject: `Nouveau message de ${nom}${sujet ? ` — ${sujet}` : ""}`,
-            html: `
-              <div style="font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:32px 24px">
-                <p style="font-size:13px;color:#82756a;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:16px">Nouveau message via ddmwigs.com</p>
-                <p style="font-size:15px;color:#1b1c1c"><strong>${escapeHtml(nom)}</strong> — ${escapeHtml(email)}${tel ? ` — ${escapeHtml(tel)}` : ""}</p>
-                ${sujet ? `<p style="font-size:13px;color:#7d562d;text-transform:uppercase;letter-spacing:0.05em">${escapeHtml(sujet)}</p>` : ""}
-                <p style="font-size:15px;color:#50453b;line-height:1.6;white-space:pre-wrap;border-left:3px solid #d4c4b7;padding-left:16px;margin:24px 0">${escapeHtml(message)}</p>
-                <a href="https://ddmwigs.com/admin/clients?tab=messages" style="font-size:13px;color:#7d562d">Répondre depuis l'admin →</a>
-              </div>`,
-          }),
-        });
+      if (setting?.value) {
+        const { subject, html } = contactNotificationEmail({ nom, email, tel, sujet, message });
+        await sendEmail({ apiKey: resendKey, to: setting.value, subject, html, replyTo: email });
       }
     }
   } catch (e) {

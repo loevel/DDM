@@ -3,59 +3,12 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
 import { requireAdmin } from "~/lib/admin-session.server";
+import { stockAlertEmail, sendEmail } from "~/lib/email.server";
 
-async function sendStockAlertEmail(apiKey: string, to: string, prenom: string, productName: string, slug: string): Promise<void> {
-  const name = prenom ? ` ${prenom}` : "";
-  const url = `https://ddmwigs.com/produits/${slug}`;
-  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"></head>
-<body style="margin:0;padding:0;background:#f7f2ed;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f2ed;padding:40px 20px;"><tr><td align="center">
-<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;max-width:560px;width:100%;">
-  <tr><td style="background:#1a1a1a;padding:28px 40px;text-align:center;">
-    <p style="margin:0;font-family:Georgia,serif;font-size:22px;font-weight:bold;color:#c9a87c;letter-spacing:3px;">DDM WIGS</p>
-    <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:10px;color:#ffffff80;letter-spacing:4px;text-transform:uppercase;">&amp; More</p>
-  </td></tr>
-  <tr><td style="padding:36px 40px 24px;text-align:center;">
-    <p style="margin:0;font-family:Arial,sans-serif;font-size:10px;color:#c9a87c;letter-spacing:3px;text-transform:uppercase;">Alerte stock</p>
-    <h1 style="margin:10px 0 16px;font-family:Georgia,serif;font-size:24px;color:#1a1a1a;font-weight:normal;">De retour en boutique !</h1>
-    <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#6b5e52;line-height:1.7;">
-      Bonjour${name} 🎉<br><br>
-      Bonne nouvelle — le produit que vous avez ajouté à vos favoris est de nouveau disponible :
-    </p>
-  </td></tr>
-  <tr><td style="padding:0 40px 28px;">
-    <div style="border:2px solid #c9a87c;padding:20px;text-align:center;">
-      <p style="margin:0;font-family:Georgia,serif;font-size:18px;color:#1a1a1a;font-weight:bold;">${productName}</p>
-    </div>
-  </td></tr>
-  <tr><td style="padding:0 40px 36px;text-align:center;">
-    <a href="${url}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;font-family:Arial,sans-serif;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;padding:16px 36px;">
-      Voir le produit →
-    </a>
-    <p style="margin:16px 0 0;font-family:Arial,sans-serif;font-size:11px;color:#9b8b7a;">
-      Les stocks sont limités — commandez vite !
-    </p>
-  </td></tr>
-  <tr><td style="background:#f7f2ed;padding:24px 40px;text-align:center;border-top:1px solid #e8ddd4;">
-    <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#b5a89a;">
-      DDM Wigs &amp; More · Vous recevez cet email car vous avez activé les alertes de stock.<br>
-      <a href="https://ddmwigs.com/compte/profil" style="color:#c9a87c;text-decoration:none;">Gérer mes préférences</a>
-    </p>
-  </td></tr>
-</table></td></tr></table>
-</body></html>`;
-
+async function sendStockAlertEmail(apiKey: string, db: D1Database, to: string, prenom: string, productName: string, slug: string): Promise<void> {
   try {
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: "DDM Wigs <noreply@ddmwigs.com>",
-        to: [to],
-        subject: `${productName} est de retour en stock ! 🎉`,
-        html,
-      }),
-    });
+    const { subject, html } = await stockAlertEmail(db, { prenom, productName, slug });
+    await sendEmail({ apiKey, to, subject, html });
   } catch { /* ne pas bloquer le traitement du retour */ }
 }
 
@@ -153,7 +106,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
             for (const wisher of wishers ?? []) {
               const prenom = wisher.first_name ?? wisher.last_name ?? "";
-              await sendStockAlertEmail(apiKey, wisher.email, prenom, produit.name, produit.slug);
+              await sendStockAlertEmail(apiKey, db, wisher.email, prenom, produit.name, produit.slug);
             }
           }
         }

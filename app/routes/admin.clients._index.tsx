@@ -2,6 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import { requireAdmin } from "~/lib/admin-session.server";
+import { contactReplyEmail, sendEmail } from "~/lib/email.server";
 
 export const meta: MetaFunction = () => [{ title: "Clients — Admin DDM" }];
 
@@ -67,10 +68,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   });
 }
 
-function escapeHtml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
 export async function action({ request, context }: ActionFunctionArgs) {
   const admin = await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
@@ -97,29 +94,15 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const resendKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
     if (!resendKey) return json({ error: "RESEND_API_KEY manquante — email non envoyé.", messageId });
 
-    const res = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        from: "DDM Wigs & More <noreply@ddmwigs.com>",
-        to: [msg.email],
-        reply_to: admin.email,
-        subject: `Re: ${msg.sujet || "Votre message"} — DDM Wigs & More`,
-        html: `
-          <div style="font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;background:#fcf9f8">
-            <p style="font-size:22px;font-weight:800;color:#7d562d;letter-spacing:0.05em;margin-bottom:4px">DDM WIGS & MORE</p>
-            <hr style="border:none;border-top:1px solid #d4c4b7;margin:16px 0 32px">
-            <p style="font-size:16px;color:#1b1c1c;margin-bottom:8px">Bonjour ${escapeHtml(msg.nom)},</p>
-            <p style="font-size:15px;color:#50453b;line-height:1.6;white-space:pre-wrap">${escapeHtml(replyText)}</p>
-            <p style="font-size:12px;color:#82756a;margin-top:40px;line-height:1.6;border-left:3px solid #d4c4b7;padding-left:12px">
-              Votre message :<br>${escapeHtml(msg.message)}
-            </p>
-          </div>`,
-      }),
+    const { subject, html } = contactReplyEmail({
+      nom: msg.nom,
+      sujet: msg.sujet,
+      originalMessage: msg.message,
+      replyText,
     });
+    const ok = await sendEmail({ apiKey: resendKey, to: msg.email, subject, html, replyTo: admin.email });
 
-    if (!res.ok) {
-      console.error("[Admin] Envoi réponse échoué:", res.status, await res.text());
+    if (!ok) {
       return json({ error: "L'envoi de l'email a échoué. Réessayez.", messageId });
     }
 

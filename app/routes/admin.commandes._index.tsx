@@ -2,6 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react";
 import { requireAdmin } from "~/lib/admin-session.server";
+import { orderStatusEmail, sendEmail } from "~/lib/email.server";
 
 export const meta: MetaFunction = () => [{ title: "Commandes — Admin DDM" }];
 
@@ -48,36 +49,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     .bind(newStatus, ref).run();
 
   if (resendKey) {
-    const SUBJECT: Record<string, string> = {
-      confirmed: `Votre commande ${ref} est confirmée ✅`,
-      shipped:   `Votre commande ${ref} a été expédiée 📦`,
-      delivered: `Votre commande ${ref} a été livrée 🎉`,
-      cancelled: `Votre commande ${ref} a été annulée`,
-    };
-    const subject = SUBJECT[newStatus];
-    if (subject) {
-      const order = await db.prepare("SELECT customer_name, customer_email FROM orders WHERE reference = ?")
-        .bind(ref).first<{ customer_name: string; customer_email: string }>();
-      if (order) {
-        const bodyMap: Record<string, string> = {
-          confirmed: `<p>Votre commande <strong>${ref}</strong> a été confirmée et est en cours de préparation.</p>`,
-          shipped:   `<p>Votre commande <strong>${ref}</strong> est en route ! Vous recevrez les informations de suivi séparément.</p>`,
-          delivered: `<p>Votre commande <strong>${ref}</strong> a bien été livrée. Nous espérons que vous êtes satisfaite !</p>`,
-          cancelled: `<p>Votre commande <strong>${ref}</strong> a été annulée. Contactez-nous si vous avez des questions.</p>`,
-        };
-        const html = `
-          <div style="font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;background:#fcf9f8">
-            <p style="font-size:22px;font-weight:800;color:#7d562d;letter-spacing:0.05em;margin-bottom:4px">DDM WIGS & MORE</p>
-            <hr style="border:none;border-top:1px solid #d4c4b7;margin:16px 0 32px">
-            <p style="font-size:16px;color:#1b1c1c;margin-bottom:16px">Bonjour ${order.customer_name},</p>
-            <div style="font-size:15px;color:#50453b;line-height:1.7">${bodyMap[newStatus]}</div>
-            <p style="font-size:12px;color:#82756a;margin-top:40px">Merci de faire confiance à DDM Wigs & More.<br>— L'équipe DDM</p>
-          </div>`;
-        fetch("https://api.resend.com/emails", {
-          method: "POST",
-          headers: { "Authorization": `Bearer ${resendKey}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ from: "DDM Wigs & More <noreply@ddmwigs.com>", to: [order.customer_email], subject, html }),
-        }).catch(() => {});
+    const order = await db.prepare("SELECT customer_name, customer_email FROM orders WHERE reference = ?")
+      .bind(ref).first<{ customer_name: string; customer_email: string }>();
+    if (order) {
+      const email = orderStatusEmail({
+        reference: ref,
+        customerName: order.customer_name,
+        status: newStatus as "confirmed" | "shipped" | "delivered" | "cancelled",
+      });
+      if (email) {
+        sendEmail({ apiKey: resendKey, to: order.customer_email, ...email }).catch(() => {});
       }
     }
   }

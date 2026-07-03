@@ -83,6 +83,7 @@ const NAV = [
 
   { section: "Marketing" },
   { to: "/admin/newsletter",          label: "Newsletter",          icon: "mail" },
+  { to: "/admin/courriels",           label: "Courriels",           icon: "forward_to_inbox" },
   { to: "/admin/calendrier",          label: "Calendrier",          icon: "calendar_month" },
   { to: "/admin/parrainage",          label: "Parrainage",          icon: "group_add" },
   { to: "/admin/paniers-abandonnes",  label: "Paniers abandonnés",  icon: "shopping_cart_off" },

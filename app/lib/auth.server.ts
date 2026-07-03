@@ -1,8 +1,7 @@
 import type { AppLoadContext } from "@remix-run/cloudflare";
+import { magicLinkEmail, sendEmail } from "~/lib/email.server";
 
 const TOKEN_TTL_MIN = 15;
-const FROM_ADDRESS = "noreply@ddmwigs.com";
-const FROM_NAME = "DDM Wigs & More";
 
 const MAGIC_MAX = 5;              // tentatives max
 const MAGIC_WINDOW = 60 * 15;     // par fenêtre de 15 min
@@ -73,27 +72,6 @@ export async function sendMagicLink(
   const origin = new URL(request.url).origin;
   const magicUrl = `${origin}/compte/auth?token=${token}`;
 
-  const htmlBody = `
-    <div style="font-family:Manrope,sans-serif;max-width:520px;margin:0 auto;padding:40px 24px;background:#fcf9f8">
-      <p style="font-size:22px;font-weight:800;color:#7d562d;letter-spacing:0.05em;margin-bottom:4px">DDM WIGS & MORE</p>
-      <hr style="border:none;border-top:1px solid #d4c4b7;margin:16px 0 32px">
-      <p style="font-size:16px;color:#1b1c1c;margin-bottom:8px">Bonjour,</p>
-      <p style="font-size:15px;color:#50453b;line-height:1.6;margin-bottom:32px">
-        Cliquez sur le bouton ci-dessous pour accéder à votre espace client.<br>
-        Ce lien est valide pendant <strong>${TOKEN_TTL_MIN} minutes</strong>.
-      </p>
-      <a href="${magicUrl}"
-         style="display:inline-block;background:#7d562d;color:#ffffff;padding:14px 32px;font-size:13px;font-weight:700;letter-spacing:0.1em;text-decoration:none;text-transform:uppercase">
-        Accéder à mon espace
-      </a>
-      <p style="font-size:12px;color:#82756a;margin-top:40px;line-height:1.5">
-        Si vous n'avez pas demandé ce lien, ignorez simplement cet email.<br>
-        Ou copiez cette URL dans votre navigateur :<br>
-        <span style="color:#7d562d;word-break:break-all">${magicUrl}</span>
-      </p>
-    </div>
-  `;
-
   const resendApiKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
 
   if (!resendApiKey) {
@@ -102,25 +80,9 @@ export async function sendMagicLink(
     return;
   }
 
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${resendApiKey}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      from: `${FROM_NAME} <${FROM_ADDRESS}>`,
-      to: [email],
-      subject: "Votre lien de connexion — DDM Wigs & More",
-      html: htmlBody,
-    }),
-  });
-
-  if (!res.ok) {
-    const err = await res.text();
-    console.error(`[Resend] Erreur envoi email: ${res.status} — ${err}`);
-    throw new Error("Impossible d'envoyer l'email de connexion.");
-  }
+  const { subject, html } = magicLinkEmail({ magicUrl, ttlMin: TOKEN_TTL_MIN });
+  const ok = await sendEmail({ apiKey: resendApiKey, to: email, subject, html });
+  if (!ok) throw new Error("Impossible d'envoyer l'email de connexion.");
 }
 
 export async function validateToken(
