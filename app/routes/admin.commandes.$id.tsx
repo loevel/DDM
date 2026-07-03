@@ -152,9 +152,19 @@ export default function CommandeDetail() {
             Créée le {new Date(o.created_at).toLocaleDateString("fr-CA", { day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
-        <span className={`inline-block px-3 py-1 rounded text-xs font-semibold uppercase ${STATUS_COLOR[o.status] ?? "bg-gray-100 text-gray-600"}`}>
-          {STATUS_FR[o.status] ?? o.status}
-        </span>
+        <div className="flex items-center gap-3">
+          <a
+            href={`/api/commandes/${o.reference}/recu`}
+            download
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-outline-variant text-xs text-on-surface-variant hover:border-primary hover:text-primary transition-colors"
+          >
+            <span className="material-symbols-outlined text-sm">download</span>
+            Reçu PDF
+          </a>
+          <span className={`inline-block px-3 py-1 rounded text-xs font-semibold uppercase ${STATUS_COLOR[o.status] ?? "bg-gray-100 text-gray-600"}`}>
+            {STATUS_FR[o.status] ?? o.status}
+          </span>
+        </div>
       </div>
 
       {actionData?.ok && (

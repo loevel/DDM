@@ -90,6 +90,16 @@ export default function Commandes() {
                     <p className="font-body-sm text-body-sm text-on-surface-variant">{order.notes}</p>
                   </div>
                 )}
+                <div className="px-6 pb-4 flex justify-end">
+                  <a
+                    href={`/api/commandes/${order.reference}/recu`}
+                    download
+                    className="inline-flex items-center gap-1.5 text-xs text-on-surface-variant hover:text-primary transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-sm">download</span>
+                    Télécharger le reçu (PDF)
+                  </a>
+                </div>
               </div>
             );
           })}
