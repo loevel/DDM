@@ -99,6 +99,16 @@ export default function CommandeConfirmee() {
           Mes commandes
         </Link>
       </div>
+      {orderRef && (
+        <a
+          href={`/api/commandes/${orderRef}/recu`}
+          download
+          className="inline-flex items-center gap-1.5 mt-6 text-xs text-on-surface-variant hover:text-primary transition-colors"
+        >
+          <span className="material-symbols-outlined text-sm">download</span>
+          Télécharger le reçu PDF
+        </a>
+      )}
     </main>
   );
 }
