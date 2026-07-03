@@ -68,7 +68,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     .prepare(`
       SELECT oi.id FROM order_items oi
       JOIN orders o ON o.id = oi.order_id
-      WHERE o.customer_email = ? AND oi.product_id = ? AND o.payment_status = 'paid'
+      WHERE o.customer_email = ? AND oi.product_id = ?
+        AND (o.payment_status = 'paid' OR o.status IN ('confirmed', 'shipped', 'delivered'))
       LIMIT 1
     `)
     .bind(customer.email, productId)
