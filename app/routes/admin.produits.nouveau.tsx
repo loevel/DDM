@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState, useRef } from "react";
 import { cfImage } from "~/lib/images";
+import { requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Nouveau produit — Admin DDM" }];
 
@@ -26,6 +27,7 @@ type MediaItemWithKey = MediaItem & { _key: string };
 // ─── Action ───────────────────────────────────────────────────────────────────
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  await requireAdmin(request, context);
   const f = await request.formData();
   const g = (k: string) => String(f.get(k) ?? "").trim();
   const n = (k: string) => { const v = g(k); return v ? Number(v) : null; };

@@ -1,7 +1,7 @@
 import { redirect } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, useActionData, useNavigation } from "@remix-run/react";
-import { sendMagicLink } from "~/lib/auth.server";
+import { sendMagicLink, checkMagicLinkRateLimit } from "~/lib/auth.server";
 import { getCustomerId } from "~/lib/session.server";
 
 export const meta: MetaFunction = () => [
@@ -20,6 +20,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return { error: "Veuillez entrer une adresse email valide." };
+  }
+
+  const blocked = await checkMagicLinkRateLimit(email, context, request);
+  if (blocked > 0) {
+    const min = Math.ceil(blocked / 60);
+    return { error: `Trop de tentatives. Réessayez dans ${min} minute${min > 1 ? "s" : ""}.` };
   }
 
   try {

@@ -1,6 +1,7 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useLoaderData } from "@remix-run/react";
+import { requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Gestion du stock — Admin DDM" }];
 
@@ -30,6 +31,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  await requireAdmin(request, context);
   const f = await request.formData();
   const g = (k: string) => String(f.get(k) ?? "").trim();
   const db = context.cloudflare.env.DB;
