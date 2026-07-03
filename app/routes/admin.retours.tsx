@@ -3,6 +3,61 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { Form, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
 
+async function sendStockAlertEmail(apiKey: string, to: string, prenom: string, productName: string, slug: string): Promise<void> {
+  const name = prenom ? ` ${prenom}` : "";
+  const url = `https://ddmwigs.com/produits/${slug}`;
+  const html = `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"></head>
+<body style="margin:0;padding:0;background:#f7f2ed;">
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f2ed;padding:40px 20px;"><tr><td align="center">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;max-width:560px;width:100%;">
+  <tr><td style="background:#1a1a1a;padding:28px 40px;text-align:center;">
+    <p style="margin:0;font-family:Georgia,serif;font-size:22px;font-weight:bold;color:#c9a87c;letter-spacing:3px;">DDM WIGS</p>
+    <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:10px;color:#ffffff80;letter-spacing:4px;text-transform:uppercase;">&amp; More</p>
+  </td></tr>
+  <tr><td style="padding:36px 40px 24px;text-align:center;">
+    <p style="margin:0;font-family:Arial,sans-serif;font-size:10px;color:#c9a87c;letter-spacing:3px;text-transform:uppercase;">Alerte stock</p>
+    <h1 style="margin:10px 0 16px;font-family:Georgia,serif;font-size:24px;color:#1a1a1a;font-weight:normal;">De retour en boutique !</h1>
+    <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;color:#6b5e52;line-height:1.7;">
+      Bonjour${name} 🎉<br><br>
+      Bonne nouvelle — le produit que vous avez ajouté à vos favoris est de nouveau disponible :
+    </p>
+  </td></tr>
+  <tr><td style="padding:0 40px 28px;">
+    <div style="border:2px solid #c9a87c;padding:20px;text-align:center;">
+      <p style="margin:0;font-family:Georgia,serif;font-size:18px;color:#1a1a1a;font-weight:bold;">${productName}</p>
+    </div>
+  </td></tr>
+  <tr><td style="padding:0 40px 36px;text-align:center;">
+    <a href="${url}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;font-family:Arial,sans-serif;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;padding:16px 36px;">
+      Voir le produit →
+    </a>
+    <p style="margin:16px 0 0;font-family:Arial,sans-serif;font-size:11px;color:#9b8b7a;">
+      Les stocks sont limités — commandez vite !
+    </p>
+  </td></tr>
+  <tr><td style="background:#f7f2ed;padding:24px 40px;text-align:center;border-top:1px solid #e8ddd4;">
+    <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#b5a89a;">
+      DDM Wigs &amp; More · Vous recevez cet email car vous avez activé les alertes de stock.<br>
+      <a href="https://ddmwigs.com/compte/profil" style="color:#c9a87c;text-decoration:none;">Gérer mes préférences</a>
+    </p>
+  </td></tr>
+</table></td></tr></table>
+</body></html>`;
+
+  try {
+    await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        from: "DDM Wigs <noreply@ddmwigs.com>",
+        to: [to],
+        subject: `${productName} est de retour en stock ! 🎉`,
+        html,
+      }),
+    });
+  } catch { /* ne pas bloquer le traitement du retour */ }
+}
+
 export const meta: MetaFunction = () => [{ title: "Retours clients — Admin DDM" }];
 
 const RAISONS: Record<string, string> = {
@@ -68,12 +123,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
     await db.prepare("UPDATE retours_clients SET statut = ? WHERE id = ?")
       .bind(newStatut, id).run();
 
-    // Si approuvé et revendable → remettre en stock
+    // Si approuvé et revendable → remettre en stock + alertes
     if (newStatut === "traite") {
       const retour = await db.prepare("SELECT * FROM retours_clients WHERE id = ?").bind(id).first() as any;
       if (retour?.etat_produit === "revendable" && retour?.product_id) {
         const qte = retour.quantite ?? 1;
-        const produit = await db.prepare("SELECT stock FROM products WHERE id = ?").bind(retour.product_id).first() as any;
+        const produit = await db.prepare("SELECT id, name, slug, stock FROM products WHERE id = ?").bind(retour.product_id).first() as any;
         const stockAvant = produit?.stock ?? 0;
         const stockApres = stockAvant + qte;
         await db.prepare("UPDATE products SET stock = ?, updated_at = datetime('now') WHERE id = ?")
@@ -82,6 +137,24 @@ export async function action({ request, context }: ActionFunctionArgs) {
           INSERT INTO stock_mouvements (product_id, type, quantite, stock_avant, stock_apres, reference_type, reference_id, notes)
           VALUES (?,?,?,?,?,?,?,?)
         `).bind(retour.product_id, "retour_client", qte, stockAvant, stockApres, "retour", id, `Retour client traité #${id}`).run();
+
+        // Envoyer alertes retour en stock aux clients qui ont ce produit en wishlist
+        if (produit && stockAvant === 0) {
+          const apiKey = (context.cloudflare.env as any).RESEND_API_KEY as string | undefined;
+          if (apiKey) {
+            const { results: wishers } = await db.prepare(`
+              SELECT c.email, c.first_name, c.last_name
+              FROM wishlists w
+              JOIN customers c ON c.id = w.customer_id
+              WHERE w.product_id = ? AND c.alertes_stock = 1 AND c.email IS NOT NULL
+            `).bind(retour.product_id).all<{ email: string; first_name: string | null; last_name: string | null }>();
+
+            for (const wisher of wishers ?? []) {
+              const prenom = wisher.first_name ?? wisher.last_name ?? "";
+              await sendStockAlertEmail(apiKey, wisher.email, prenom, produit.name, produit.slug);
+            }
+          }
+        }
       }
     }
     return json({ ok: true });
