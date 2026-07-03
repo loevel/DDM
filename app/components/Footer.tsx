@@ -50,8 +50,6 @@ export function Footer() {
             { label: "VISA", bg: "#1a1f71", color: "#fff", wide: true },
             { label: "MC", bg: "#eb001b", color: "#fff", accent: "#f79e1b" },
             { label: "AMEX", bg: "#007bc1", color: "#fff" },
-            { label: "Interac", bg: "#ffd100", color: "#000" },
-            { label: "PayPal", bg: "#003087", color: "#fff" },
             { label: "Apple Pay", bg: "#000", color: "#fff" },
             { label: "Google Pay", bg: "#fff", color: "#3c4043", border: true },
           ].map(({ label, bg, color, border }) => (

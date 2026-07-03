@@ -815,7 +815,7 @@ export default function FicheProduit() {
           {/* Trust badges */}
           <div className="flex flex-wrap items-center justify-between gap-y-2 pt-4 border-t border-outline-variant">
             {[
-              { icon: "assignment_return", label: "30 Jours Retour" },
+              { icon: "assignment_return", label: "14 Jours Retour" },
               { icon: "local_shipping", label: "Livraison Gratuite" },
               { icon: "schedule", label: "Expédition 72h" },
               { icon: "verified", label: "100% Vrais Cheveux" },

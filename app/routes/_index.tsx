@@ -142,7 +142,7 @@ export default function Index() {
             <div className="flex items-center gap-4">
               <span className="material-symbols-outlined text-primary text-3xl">assignment_return</span>
               <div>
-                <h4 className="font-label-md text-sm text-on-surface">30 Jours Retour</h4>
+                <h4 className="font-label-md text-sm text-on-surface">14 Jours Retour</h4>
                 <p className="text-[12px] text-on-surface-variant">Satisfaction garantie</p>
               </div>
             </div>
@@ -221,14 +221,14 @@ export default function Index() {
               </div>
               <div className="material-symbols-outlined text-4xl text-outline-variant group-hover:text-primary group-hover:translate-x-2 transition-all">trending_up</div>
             </Link>
-            <div className="bg-secondary-container/20 p-10 flex items-center justify-between group cursor-pointer hover:bg-secondary-container/40 transition-colors">
+            <Link to="/ventes-flash" className="bg-secondary-container/20 p-10 flex items-center justify-between group cursor-pointer hover:bg-secondary-container/40 transition-colors">
               <div className="space-y-2">
                 <span className="text-secondary font-label-md text-xs uppercase">Promotion</span>
-                <h3 className="font-headline-md text-headline-md">Flash Vente</h3>
+                <h3 className="font-headline-md text-headline-md">Ventes Flash</h3>
                 <p className="text-on-surface-variant text-sm">Offres limitées dans le temps.</p>
               </div>
               <div className="material-symbols-outlined text-4xl text-outline-variant group-hover:text-secondary group-hover:translate-x-2 transition-all">bolt</div>
-            </div>
+            </Link>
           </div>
         </div>
       </section>
@@ -299,7 +299,7 @@ export default function Index() {
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-grid-gutter">
             {featuredProducts.map((product: Product) => (
-              <Link to={`/boutique`} key={product.id} className="group cursor-pointer">
+              <Link to={`/boutique/${product.slug}`} key={product.id} className="group cursor-pointer">
                 <div className="aspect-[4/5] overflow-hidden bg-surface-container relative mb-4">
                   {product.image_key && (
                     <img
@@ -334,12 +334,12 @@ export default function Index() {
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-grid-gutter">
           {[
-            { name: "Lisse", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBxubQU5RhI8bRCD25p6r_P5QJNuq_tzQhOf2rXOsSUHA0YQPZyw3g75A0k3D_TxdPc912kjItpmb11y438cb2YognsZBqILevEzQvH_2svSgC0rDOIBLqICODzydhQ7urdVYNAQsnr2mAEZkx7FwwyMFXKX6tUyuxN_4KFjAiCCMcH0VtHs8Qv0oJWwz5epfbVUt1-CXOCYxPovgAfAJdy_rZIlcHLEREFsiwKEGn8JbKrX1v16uZ4nklM_xOsPeO3cGn6syU-XaE" },
-            { name: "Body Wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuCCbcyZDFlEUORFmblZANwAMfCUCqOkctvG5QFcBrCOQV-nphWsF7tS20ffky6c3CvWhH-MwY9lAhxG4Mx9WFX8sDrVXcRxEy99UbwX4cq2ZfAwB3nqFjDFd76bjPOIfVDVeb8jfNtg7SwYuyT7fGR0ZgYEnAAas-huxvkHdytFje67w2b8064LnqZJ1ymKw6DSATRGodGcXyxaSGqk1BkAxekXOFYgdtoVUSvdEGBMvuN8NHYVJJsLrvxsE9M66QripwgSxnmpoKs" },
-            { name: "Bouclé", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuD60WEnVX-_yLSvBntPn9HrU1nMVF-gv9xPTRec1w6rXpr4rqxeI66WP2DFiBaYoulS2wO6R1uIRVXSB1rN_Pj5mbPzb303zLNDW2PMgXnyrLTWDMKLMvhBx22vlId7Jw9fQbhcsxLH7jR3S1tDLkN-zul8kq20lL6nk1BFRFurGFVrK-hXpavqiXVgAlhe7fVFC3PbQwTq9v59NgUOuZ3JIP-wvjMwOaXo_uciqMIP9hB2rhSlCzIgco_KjJbOZGb9ivAfYQEmlXA" },
-            { name: "Water Wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU" },
+            { name: "Lisse", slug: "lisse", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBxubQU5RhI8bRCD25p6r_P5QJNuq_tzQhOf2rXOsSUHA0YQPZyw3g75A0k3D_TxdPc912kjItpmb11y438cb2YognsZBqILevEzQvH_2svSgC0rDOIBLqICODzydhQ7urdVYNAQsnr2mAEZkx7FwwyMFXKX6tUyuxN_4KFjAiCCMcH0VtHs8Qv0oJWwz5epfbVUt1-CXOCYxPovgAfAJdy_rZIlcHLEREFsiwKEGn8JbKrX1v16uZ4nklM_xOsPeO3cGn6syU-XaE" },
+            { name: "Body Wave", slug: "body-wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuCCbcyZDFlEUORFmblZANwAMfCUCqOkctvG5QFcBrCOQV-nphWsF7tS20ffky6c3CvWhH-MwY9lAhxG4Mx9WFX8sDrVXcRxEy99UbwX4cq2ZfAwB3nqFjDFd76bjPOIfVDVeb8jfNtg7SwYuyT7fGR0ZgYEnAAas-huxvkHdytFje67w2b8064LnqZJ1ymKw6DSATRGodGcXyxaSGqk1BkAxekXOFYgdtoVUSvdEGBMvuN8NHYVJJsLrvxsE9M66QripwgSxnmpoKs" },
+            { name: "Bouclé", slug: "boucle", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuD60WEnVX-_yLSvBntPn9HrU1nMVF-gv9xPTRec1w6rXpr4rqxeI66WP2DFiBaYoulS2wO6R1uIRVXSB1rN_Pj5mbPzb303zLNDW2PMgXnyrLTWDMKLMvhBx22vlId7Jw9fQbhcsxLH7jR3S1tDLkN-zul8kq20lL6nk1BFRFurGFVrK-hXpavqiXVgAlhe7fVFC3PbQwTq9v59NgUOuZ3JIP-wvjMwOaXo_uciqMIP9hB2rhSlCzIgco_KjJbOZGb9ivAfYQEmlXA" },
+            { name: "Water Wave", slug: "water-wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU" },
           ].map((cat) => (
-            <Link to={`/boutique?category=${cat.name.toLowerCase().replace(" ", "-")}`} key={cat.name} className="text-center group cursor-pointer">
+            <Link to={`/boutique?texture=${cat.slug}`} key={cat.name} className="text-center group cursor-pointer">
               <div className="aspect-square rounded-full overflow-hidden mb-4 border-2 border-transparent group-hover:border-primary transition-all p-1">
                 <img alt={cat.name} className="w-full h-full object-cover rounded-full" src={cat.img} />
               </div>
@@ -353,29 +353,83 @@ export default function Index() {
       <section className="mt-section-gap-desktop bg-surface-container-high py-section-gap-desktop relative overflow-hidden">
         <div className="max-w-container-max-width mx-auto px-grid-margin-desktop text-center relative z-10">
           <div className="flex justify-center mb-8">
-            <img
-              alt="VIP Reward Card"
-              className="h-40 w-auto rotate-[-5deg] hover:rotate-0 transition-transform"
-              src="https://lh3.googleusercontent.com/aida/AP1WRLv-7RTtUbNUUxYx6LApItv_U9grg389-1NuF0m9cyIKf12v43ciK8F3D3rC9hOUxoBhvmK1bKUlE0wAT52Hv7-u2Bdcc7rcUK68gbGUC0rkkmHFv6zchuvog3LGba8qTezf5KKE5X5Y0ksrt5_s6Y0LRsHSMLDTUINaKLW8yCTCYvbns74luDroQNTQAcj__KgXeo2kpwQqfJ61xGc5gP4zPoUDWeuQvHrvrm1k4NzrB0QyhauvpjvIUUw"
-            />
+            <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center rotate-[-5deg] hover:rotate-0 transition-transform">
+              <span className="material-symbols-outlined text-primary text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>loyalty</span>
+            </div>
           </div>
           <h2 className="font-headline-lg text-headline-lg text-on-surface mb-6 italic">Rejoignez le Cercle Privé VIP</h2>
           <p className="font-body-lg text-on-surface-variant max-w-2xl mx-auto mb-10">
             Inscrivez-vous pour recevoir des guides de style exclusifs, des alertes de nouveaux arrivages et recevez <span className="font-bold text-primary">10% de réduction</span> sur votre première commande premium.
           </p>
-          <form className="max-w-md mx-auto flex flex-col md:flex-row gap-4">
-            <input
-              className="flex-grow bg-transparent border-0 border-b border-outline focus:ring-0 focus:border-primary font-body-md placeholder:text-on-surface-variant/50 px-0 py-3 text-on-surface"
-              placeholder="Votre adresse e-mail"
-              type="email"
-            />
-            <button className="px-10 py-3 bg-on-surface text-white font-label-md text-label-md rounded-sm hover:bg-primary transition-colors">S'inscrire</button>
-          </form>
+          <NewsletterSignup />
           <p className="mt-6 text-[11px] text-on-surface-variant/60 font-label-md">En vous inscrivant, vous acceptez notre <Link to="/confidentialite" className="underline">politique de confidentialité</Link>.</p>
         </div>
       </section>
 
     </>
+  );
+}
+
+// ─── Inscription newsletter (VIP) ────────────────────────────────────────────
+
+function NewsletterSignup() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.includes("@") || state === "loading") return;
+    setState("loading");
+    try {
+      const res = await fetch("/api/newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setState(res.ok ? "done" : "error");
+    } catch {
+      setState("error");
+    }
+  }
+
+  if (state === "done") {
+    return (
+      <div className="max-w-md mx-auto">
+        <div className="flex items-center justify-center gap-2 text-secondary font-body-md mb-4">
+          <span className="material-symbols-outlined">check_circle</span>
+          Bienvenue dans le Cercle Privé !
+        </div>
+        <div className="bg-surface border-2 border-dashed border-primary px-6 py-4 inline-block">
+          <p className="font-label-md text-[10px] uppercase tracking-[0.2em] text-on-surface-variant mb-1">Votre code de bienvenue</p>
+          <p className="font-serif text-3xl font-bold text-primary tracking-[0.15em]">VIP10</p>
+          <p className="font-body-sm text-body-sm text-on-surface-variant mt-1">−10 % sur votre première commande</p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={handleSubmit} className="max-w-md mx-auto flex flex-col md:flex-row gap-4">
+      <input
+        className="flex-grow bg-transparent border-0 border-b border-outline focus:ring-0 focus:border-primary font-body-md placeholder:text-on-surface-variant/50 px-0 py-3 text-on-surface"
+        placeholder="Votre adresse e-mail"
+        type="email"
+        name="email"
+        required
+        value={email}
+        onChange={e => setEmail(e.target.value)}
+      />
+      <button
+        type="submit"
+        disabled={state === "loading"}
+        className="px-10 py-3 bg-on-surface text-white font-label-md text-label-md rounded-sm hover:bg-primary transition-colors disabled:opacity-60"
+      >
+        {state === "loading" ? "Inscription…" : "S'inscrire"}
+      </button>
+      {state === "error" && (
+        <p className="md:absolute md:mt-14 font-body-sm text-body-sm text-error">Une erreur est survenue — réessayez.</p>
+      )}
+    </form>
   );
 }
 
