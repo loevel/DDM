@@ -3,62 +3,9 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { getAdminUser, logAdminAction } from "~/lib/admin-session.server";
 import { isAdminAuthenticated } from "~/lib/admin-session.server";
+import { newsletterEmail, sendEmail } from "~/lib/email.server";
 
 export const meta: MetaFunction = () => [{ title: "Newsletter — Admin DDM" }];
-
-// ── Email builder ─────────────────────────────────────────────────────────────
-
-function buildNewsletterEmail(subject: string, body: string, ctaLabel: string, ctaUrl: string, unsubUrl: string): string {
-  const paragraphs = body
-    .split(/\n+/)
-    .filter(l => l.trim())
-    .map(l => `<p style="margin:0 0 14px;font-family:Arial,sans-serif;font-size:14px;color:#6b5e52;line-height:1.7;">${l.trim()}</p>`)
-    .join("");
-
-  const ctaBlock = ctaLabel && ctaUrl ? `
-  <tr><td style="padding:20px 40px 36px;text-align:center;">
-    <a href="${ctaUrl}" style="display:inline-block;background:#1a1a1a;color:#fff;text-decoration:none;font-family:Arial,sans-serif;font-size:12px;font-weight:bold;letter-spacing:2px;text-transform:uppercase;padding:16px 36px;">
-      ${ctaLabel}
-    </a>
-  </td></tr>` : "";
-
-  return `<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#f7f2ed;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f2ed;padding:40px 20px;"><tr><td align="center">
-<table width="560" cellpadding="0" cellspacing="0" style="background:#fff;max-width:560px;width:100%;">
-  <tr><td style="background:#1a1a1a;padding:28px 40px;text-align:center;">
-    <p style="margin:0;font-family:Georgia,serif;font-size:22px;font-weight:bold;color:#c9a87c;letter-spacing:3px;">DDM WIGS</p>
-    <p style="margin:4px 0 0;font-family:Arial,sans-serif;font-size:10px;color:#ffffff80;letter-spacing:4px;text-transform:uppercase;">&amp; More</p>
-  </td></tr>
-  <tr><td style="padding:36px 40px 8px;">
-    <h1 style="margin:0 0 20px;font-family:Georgia,serif;font-size:24px;color:#1a1a1a;font-weight:normal;text-align:center;">${subject}</h1>
-    ${paragraphs}
-  </td></tr>
-  ${ctaBlock}
-  <tr><td style="background:#f7f2ed;padding:24px 40px;text-align:center;border-top:1px solid #e8ddd4;">
-    <p style="margin:0 0 6px;font-family:Georgia,serif;font-size:13px;color:#9b8b7a;">DDM Wigs &amp; More</p>
-    <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#b5a89a;">
-      Vous recevez cet email car vous êtes abonné à notre newsletter.<br>
-      <a href="${unsubUrl}" style="color:#c9a87c;text-decoration:underline;">Se désabonner</a> ·
-      <a href="https://ddmwigs.com" style="color:#c9a87c;text-decoration:none;">Visiter la boutique</a>
-    </p>
-  </td></tr>
-</table></td></tr></table>
-</body></html>`;
-}
-
-// ── Resend helper ─────────────────────────────────────────────────────────────
-
-async function sendEmail(apiKey: string, to: string, subject: string, html: string): Promise<boolean> {
-  try {
-    const r = await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({ from: "DDM Wigs <noreply@ddmwigs.com>", to: [to], subject, html }),
-    });
-    return r.ok;
-  } catch { return false; }
-}
 
 // ── Loader ────────────────────────────────────────────────────────────────────
 
@@ -144,8 +91,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
       const batch = list.slice(i, i + 10);
       await Promise.all(batch.map(async ([email, token]) => {
         const unsubUrl = `https://ddmwigs.com/desabonnement?token=${token}`;
-        const html = buildNewsletterEmail(subject, body, ctaLabel, ctaUrl, unsubUrl);
-        const ok = await sendEmail(apiKey, email, subject, html);
+        const html = newsletterEmail({ subject, body, ctaLabel, ctaUrl, unsubUrl });
+        const ok = await sendEmail({ apiKey, to: email, subject, html });
         if (ok) sent++; else errors++;
       }));
     }
