@@ -635,7 +635,7 @@ export default function FicheProduit() {
                 -{discount}%
               </span>
             )}
-            <span className="font-sans text-xs text-on-surface-variant mb-1">CAD · taxes incluses</span>
+            <span className="font-sans text-xs text-on-surface-variant mb-1">CAD · livraison gratuite au Canada</span>
           </div>
 
           {/* ── Sélecteur de couleur ── */}
@@ -745,14 +745,14 @@ export default function FicheProduit() {
           <div className="grid grid-cols-2 gap-x-8 gap-y-3 mb-5 text-sm font-sans pb-5 border-b border-outline-variant/50">
             {p.texture && <SpecRow icon="waves" label="Texture" value={TEXTURE_LABELS[p.texture] ?? p.texture} />}
             {p.type_lace && <SpecRow icon="crop_free" label="Construction" value={LACE_LABELS[p.type_lace] ?? p.type_lace} />}
-            {!showLongueurVariants && p.longueur_po && <SpecRow icon="straighten" label="Longueur" value={`${p.longueur_po} pouces`} />}
-            {!showDensityPicker && p.densite && <SpecRow icon="density_medium" label="Densité" value={`${p.densite}%`} />}
+            {!showLongueurVariants && (p.longueur_po ?? 0) > 0 && <SpecRow icon="straighten" label="Longueur" value={`${p.longueur_po} pouces`} />}
+            {!showDensityPicker && (p.densite ?? 0) > 0 && <SpecRow icon="density_medium" label="Densité" value={`${p.densite}%`} />}
             {!showCouleurVariants && p.couleur && <SpecRow icon="palette" label="Couleur" value={p.couleur} />}
-            {p.quantite_meches && <SpecRow icon="layers" label="Mèches" value={`${p.quantite_meches} bundle${p.quantite_meches > 1 ? "s" : ""}`} />}
+            {(p.quantite_meches ?? 0) > 0 && <SpecRow icon="layers" label="Mèches" value={`${p.quantite_meches} bundle${p.quantite_meches! > 1 ? "s" : ""}`} />}
           </div>
 
           {/* Options booléennes */}
-          {(p.hd_lace || p.glueless || p.pret_a_porter) && (
+          {(p.hd_lace === 1 || p.glueless === 1 || p.pret_a_porter === 1) && (
             <div className="flex flex-wrap gap-2 mb-5">
               {p.hd_lace === 1 && <OptionTag icon="visibility_off" label="HD Lace — dentelle invisible" />}
               {p.glueless === 1 && <OptionTag icon="block" label="Sans colle" />}
@@ -1508,7 +1508,7 @@ function RelatedCard({ product: p }: { product: Product }) {
       <p className="font-serif text-sm text-on-surface mb-1 leading-snug group-hover:text-primary transition-colors">{p.name}</p>
       <div className="flex flex-wrap gap-1 mb-1.5">
         {p.texture && <span className="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded-sm">{TEXTURE_SHORT[p.texture] ?? p.texture}</span>}
-        {p.longueur_po && <span className="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded-sm">{p.longueur_po} po</span>}
+        {(p.longueur_po ?? 0) > 0 && <span className="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded-sm">{p.longueur_po} po</span>}
       </div>
       <div className="flex items-center gap-2">
         <p className="font-sans text-sm font-bold text-primary">{p.price_cad.toFixed(2)} $ CAD</p>
