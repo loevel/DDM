@@ -8,7 +8,7 @@ export const meta: MetaFunction = () => [{ title: "Newsletter — Admin DDM" }];
 
 // ── Email builder ─────────────────────────────────────────────────────────────
 
-function buildNewsletterEmail(subject: string, body: string, ctaLabel: string, ctaUrl: string): string {
+function buildNewsletterEmail(subject: string, body: string, ctaLabel: string, ctaUrl: string, unsubUrl: string): string {
   const paragraphs = body
     .split(/\n+/)
     .filter(l => l.trim())
@@ -39,7 +39,7 @@ function buildNewsletterEmail(subject: string, body: string, ctaLabel: string, c
     <p style="margin:0 0 6px;font-family:Georgia,serif;font-size:13px;color:#9b8b7a;">DDM Wigs &amp; More</p>
     <p style="margin:0;font-family:Arial,sans-serif;font-size:11px;color:#b5a89a;">
       Vous recevez cet email car vous êtes abonné à notre newsletter.<br>
-      <a href="https://ddmwigs.com/compte/profil" style="color:#c9a87c;text-decoration:none;">Se désabonner</a> ·
+      <a href="${unsubUrl}" style="color:#c9a87c;text-decoration:underline;">Se désabonner</a> ·
       <a href="https://ddmwigs.com" style="color:#c9a87c;text-decoration:none;">Visiter la boutique</a>
     </p>
   </td></tr>
@@ -71,7 +71,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   // Compte des abonnés
   const [customerSubs, newsletterSubs] = await Promise.all([
     db.prepare("SELECT COUNT(*) as count FROM customers WHERE newsletter_optin = 1").first<{ count: number }>(),
-    db.prepare("SELECT COUNT(*) as count FROM newsletter").first<{ count: number }>(),
+    db.prepare("SELECT COUNT(*) as count FROM newsletter WHERE unsubscribed_at IS NULL").first<{ count: number }>(),
   ]);
 
   // Historique des envois (30 derniers)
@@ -110,26 +110,30 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
     if (!subject || !body) return json({ error: "Sujet et corps requis." });
 
-    const html = buildNewsletterEmail(subject, body, ctaLabel, ctaUrl);
-
-    // Récupérer les destinataires
-    const emails = new Set<string>();
+    // Destinataires avec leur jeton de désabonnement (exigence LCAP/CASL)
+    const recipients = new Map<string, string>(); // email → unsub_token
 
     if (audience === "all" || audience === "customers") {
       const { results } = await db
-        .prepare("SELECT email FROM customers WHERE newsletter_optin = 1 AND email IS NOT NULL")
-        .all<{ email: string }>();
-      for (const r of results ?? []) emails.add(r.email.toLowerCase());
+        .prepare("SELECT email, unsub_token FROM customers WHERE newsletter_optin = 1 AND email IS NOT NULL")
+        .all<{ email: string; unsub_token: string | null }>();
+      for (const r of results ?? []) {
+        if (r.unsub_token) recipients.set(r.email.toLowerCase(), r.unsub_token);
+      }
     }
 
     if (audience === "all" || audience === "newsletter") {
       const { results } = await db
-        .prepare("SELECT email FROM newsletter WHERE email IS NOT NULL")
-        .all<{ email: string }>();
-      for (const r of results ?? []) emails.add(r.email.toLowerCase());
+        .prepare("SELECT email, unsub_token FROM newsletter WHERE email IS NOT NULL AND unsubscribed_at IS NULL")
+        .all<{ email: string; unsub_token: string | null }>();
+      for (const r of results ?? []) {
+        if (r.unsub_token && !recipients.has(r.email.toLowerCase())) {
+          recipients.set(r.email.toLowerCase(), r.unsub_token);
+        }
+      }
     }
 
-    const list = [...emails];
+    const list = [...recipients.entries()];
     if (list.length === 0) return json({ error: "Aucun destinataire trouvé." });
 
     let sent = 0;
@@ -138,7 +142,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     // Envoi par lots de 10 pour respecter les limites Resend
     for (let i = 0; i < list.length; i += 10) {
       const batch = list.slice(i, i + 10);
-      await Promise.all(batch.map(async email => {
+      await Promise.all(batch.map(async ([email, token]) => {
+        const unsubUrl = `https://ddmwigs.com/desabonnement?token=${token}`;
+        const html = buildNewsletterEmail(subject, body, ctaLabel, ctaUrl, unsubUrl);
         const ok = await sendEmail(apiKey, email, subject, html);
         if (ok) sent++; else errors++;
       }));
