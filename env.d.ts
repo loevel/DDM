@@ -1,3 +1,4 @@
+/// <reference types="vite/client" />
 /// <reference path="./types/@cloudflare/workers-types/index.d.ts" />
 /// <reference path="./types/cloudflare-virtual-modules.d.ts" />
 
