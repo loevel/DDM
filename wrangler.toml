@@ -23,7 +23,7 @@ CF_ACCOUNT_ID = "d58014fa11833876c245e4828ab1cc8a"
 CF_ACCOUNT_HASH = ""   # à remplir — visible dans Cloudflare Dashboard → Images → "Account Hash"
 # Remplacer par pk_live_... quand les clés live Stripe sont activées
 STRIPE_PUBLISHABLE_KEY = "pk_test_51To5SLCwRXKOK4kRwNv5H4nDUA3rP7rAIcjeqEvwKnAUMcOQkQsU2tLx1oSY60uO9w9lt20ucobWBM4nvJpet8zY00TzK56XYk"
-TURNSTILE_SITE_KEY = "0x4AAAAAAdvJtlu8hV1oc83z"
+TURNSTILE_SITE_KEY = "0x4AAAAAADvJtlu8hV1oc83z"
 
 # ── Environnement Preview/Staging (branches PR) ──────────────────────────────
 [env.preview]
@@ -47,7 +47,7 @@ CF_ACCOUNT_HASH = ""   # à remplir — visible dans Images → "Account Hash"
 # MODE TEST — remplacer par pk_live_... quand Stripe live est activé
 # Stripe Dashboard → Developers → API keys → Publishable key
 STRIPE_PUBLISHABLE_KEY = "pk_test_51To5SLCwRXKOK4kRwNv5H4nDUA3rP7rAIcjeqEvwKnAUMcOQkQsU2tLx1oSY60uO9w9lt20ucobWBM4nvJpet8zY00TzK56XYk"
-TURNSTILE_SITE_KEY = "0x4AAAAAAdvJtlu8hV1oc83z"
+TURNSTILE_SITE_KEY = "0x4AAAAAADvJtlu8hV1oc83z"
 
 # ── Secrets (Cloudflare Pages → Settings → Environment variables → Production) ──
 # ADMIN_SECRET          — mot de passe admin (chaîne aléatoire longue)
