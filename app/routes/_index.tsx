@@ -8,6 +8,8 @@ import type { Product } from "~/lib/db.server";
 
 const BASE = "https://ddmwigs.com";
 const SITE_DESC = "Perruques en cheveux humains 100% — Lace front, HD lace, glueless. Livraison rapide au Canada. DDM Wigs & More, Montréal.";
+// Image du hero — utilisée pour les partages sociaux (og:image)
+const OG_IMAGE = "https://lh3.googleusercontent.com/aida/AP1WRLvgOP7GaYVKdb8rCQb9YTruiab11rrps-I_BpwRBuPJ0WmDOm6aXcAzsPkEdc3Y_iEylSp3ZhwRrzSAz0RZXCx_TS9g5y0SyW1xruxzOuH_zxvKZkqyObh0wQnCpZUBLOoHBv5PhFUuMgN-Gt3itdtP6Jr0RVz92GKuzKy6UmiVrascDDNHQHGZs2MLEdopMCXF7MmFlJalhMC5CNLP7HnKvqbof6uzcBEDkFJ1Gf6ASM-Z08JzxBlu-3Y";
 
 export const meta: MetaFunction = () => [
   { title: "DDM Wigs & More | Perruques Cheveux Humains — Montréal" },
@@ -20,11 +22,33 @@ export const meta: MetaFunction = () => [
   { property: "og:url",         content: BASE + "/" },
   { property: "og:site_name",   content: "DDM Wigs & More" },
   { property: "og:locale",      content: "fr_CA" },
+  { property: "og:image",       content: OG_IMAGE },
   // Twitter
   { name: "twitter:card",        content: "summary_large_image" },
   { name: "twitter:title",       content: "DDM Wigs & More | Perruques Cheveux Humains — Montréal" },
   { name: "twitter:description", content: SITE_DESC },
+  { name: "twitter:image",       content: OG_IMAGE },
 ];
+
+const LOCAL_BUSINESS_JSONLD = {
+  "@context": "https://schema.org",
+  "@type": "HairSalon",
+  name: "DDM Wigs & More",
+  description: SITE_DESC,
+  url: BASE,
+  image: OG_IMAGE,
+  logo: `${BASE}/images/ddm-logo.svg`,
+  address: {
+    "@type": "PostalAddress",
+    addressLocality: "Montréal",
+    addressRegion: "QC",
+    addressCountry: "CA",
+  },
+  areaServed: "CA",
+  priceRange: "$$",
+  currenciesAccepted: "CAD",
+  paymentAccepted: "Visa, Mastercard, Amex, Apple Pay, Google Pay",
+} as const;
 
 interface FlashProduct extends Product {
   flash_price: number;
@@ -132,6 +156,7 @@ export default function Index() {
   return (
     <>
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(LOCAL_BUSINESS_JSONLD) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }} />
       <HeroCarousel />
 

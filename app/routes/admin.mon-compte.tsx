@@ -27,11 +27,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   const me = await requireAdmin(request, context);
-  // Sessions "legacy" (avant les comptes nominatifs) : pas de mot de passe vérifiable
-  if (!me.id) {
-    return json({ error: "Session héritée sans compte associé. Reconnectez-vous d'abord." }, { status: 400 });
-  }
-
   const db = context.cloudflare.env.DB;
   const form = await request.formData();
   const currentPassword = String(form.get("current_password") ?? "");

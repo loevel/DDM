@@ -9,7 +9,8 @@
     "build": "remix vite:build",
     "start": "wrangler pages dev ./build/client",
     "deploy": "npm run build && node scripts/build-worker.mjs && wrangler pages deploy ./build/client --project-name ddm-wigs",
-    "typecheck": "tsc",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
     "db:migrate": "wrangler d1 execute ddm-wigs-db --file=./migrations/schema.sql",
     "db:migrate:local": "wrangler d1 execute ddm-wigs-db --local --file=./migrations/schema.sql"
   },
@@ -27,6 +28,7 @@
     "typescript": "^5.9.3",
     "vite": "^6.4.3",
     "vite-tsconfig-paths": "^6.1.1",
+    "vitest": "^4.1.9",
     "wrangler": "^4.105.0"
   },
   "dependencies": {

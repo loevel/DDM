@@ -4,6 +4,7 @@ import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/re
 import { getCustomer } from "~/lib/auth.server";
 import { clearSessionCookie, destroySession, getCustomerId, getSessionId } from "~/lib/session.server";
 import { deleteCustomerAccount, isValidEmail, requestEmailChange } from "~/lib/customer-account.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 export const meta: MetaFunction = () => [{ title: "Mon profil — DDM Wigs & More" }];
 
@@ -102,6 +103,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   if (intent === "request-email-change") {
+    const allowed = await checkRateLimit(context, request, { name: "email_change", max: 3, windowSeconds: 3600 });
+    if (!allowed) return json({ error: "Trop de demandes. Réessayez dans une heure." });
     const newEmail = String(form.get("new_email") ?? "").trim().toLowerCase();
     if (!isValidEmail(newEmail)) {
       return json({ error: "Adresse email invalide." });

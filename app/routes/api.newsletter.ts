@@ -1,7 +1,11 @@
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import { getDB } from "~/lib/db.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 export async function action({ request, context }: ActionFunctionArgs) {
+  const allowed = await checkRateLimit(context, request, { name: "newsletter", max: 5, windowSeconds: 3600 });
+  if (!allowed) return Response.json({ error: "Trop de tentatives. Réessayez plus tard." }, { status: 429 });
+
   const { email } = await request.json();
   if (!email?.includes("@")) return Response.json({ error: "Email invalide" }, { status: 400 });
 

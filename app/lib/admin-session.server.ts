@@ -135,10 +135,11 @@ export async function getAdminUser(
   if (!sid) return null;
   const val = await context.cloudflare.env.CACHE.get(`admin_session:${sid}`);
   if (!val) return null;
-  // Rétro-compat : anciennes sessions stockées comme "1" (sans identité)
-  if (val === "1") return { id: 0, email: "admin@legacy", name: "Admin", role: "owner" };
   try {
-    return JSON.parse(val) as AdminSessionUser;
+    const parsed = JSON.parse(val) as AdminSessionUser;
+    // Refuse toute session sans identité complète (ex. anciennes sessions "1")
+    if (!parsed || typeof parsed !== "object" || !parsed.id || !parsed.email) return null;
+    return parsed;
   } catch {
     return null;
   }
