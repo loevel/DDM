@@ -111,11 +111,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (newEmail === customer.email) {
       return json({ error: "C'est déjà l'adresse de votre compte." });
     }
-    const result = await requestEmailChange(customer, newEmail, context, request);
-    if (result === "taken") {
-      return json({ error: "Cette adresse est déjà associée à un autre compte." });
-    }
-    return json({ success: `Un lien de confirmation a été envoyé à ${newEmail}. Le changement sera appliqué après votre clic.` });
+    // Réponse identique que l'adresse soit libre ou déjà prise : ne révèle pas
+    // l'existence d'un compte (l'unicité est de toute façon revérifiée au clic)
+    await requestEmailChange(customer, newEmail, context, request);
+    return json({ success: `Si cette adresse est disponible, un lien de confirmation a été envoyé à ${newEmail}. Le changement sera appliqué après votre clic.` });
   }
 
   if (intent === "delete-account") {

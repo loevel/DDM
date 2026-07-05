@@ -144,7 +144,12 @@ export async function deleteCustomerAccount(
   const email = customer.email;
 
   await db.batch([
-    // Commandes conservées mais détachées du compte
+    // Commandes conservées (montants, taxes, statuts — obligations fiscales)
+    // mais anonymisées : nom, email, téléphone et adresse de livraison effacés
+    db.prepare(`UPDATE orders SET
+      customer_name = 'Compte supprimé', customer_email = 'supprime@anonyme.invalid',
+      customer_phone = NULL, shipping_address = NULL
+      WHERE customer_email = ? OR customer_id = ?`).bind(email, customerId),
     db.prepare("UPDATE orders SET customer_id = NULL WHERE customer_id = ?").bind(customerId),
     // Données personnelles supprimées
     db.prepare("DELETE FROM customer_addresses WHERE customer_id = ?").bind(customerId),
