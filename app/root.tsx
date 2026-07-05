@@ -10,8 +10,11 @@ import {
 import { Nav } from "~/components/Nav";
 import { Footer } from "~/components/Footer";
 import { AnnouncementBar } from "~/components/AnnouncementBar";
+import tailwindHref from "~/tailwind.css?url";
 
 export const links: LinksFunction = () => [
+  { rel: "stylesheet", href: tailwindHref },
+  { rel: "icon", type: "image/svg+xml", href: "/favicon.svg" },
   {
     rel: "stylesheet",
     href: "https://fonts.googleapis.com/css2?family=Libre+Caslon+Text:ital,wght@0,400;0,700;1,400&family=Manrope:wght@400;600;800&display=swap",
@@ -43,109 +46,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
         <Links />
-        <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries" />
-        <script
-          id="tailwind-config"
-          dangerouslySetInnerHTML={{
-            __html: `
-tailwind.config = {
-  darkMode: "class",
-  theme: {
-    extend: {
-      colors: {
-        "primary": "#7d562d",
-        "primary-container": "#d4a373",
-        "on-primary": "#ffffff",
-        "primary-fixed": "#ffdcbd",
-        "primary-fixed-dim": "#f0bd8b",
-        "on-primary-container": "#5b3912",
-        "on-primary-fixed": "#2c1600",
-        "on-primary-fixed-variant": "#623f18",
-        "inverse-primary": "#f0bd8b",
-        "secondary": "#5c6145",
-        "on-secondary": "#ffffff",
-        "secondary-container": "#e1e6c2",
-        "on-secondary-container": "#62674a",
-        "secondary-fixed": "#e1e6c2",
-        "secondary-fixed-dim": "#c5c9a7",
-        "on-secondary-fixed": "#1a1d07",
-        "on-secondary-fixed-variant": "#45492f",
-        "tertiary": "#625f4f",
-        "on-tertiary": "#ffffff",
-        "tertiary-container": "#b2ad9b",
-        "on-tertiary-container": "#444133",
-        "tertiary-fixed": "#e8e2cf",
-        "tertiary-fixed-dim": "#ccc6b3",
-        "on-tertiary-fixed": "#1e1c10",
-        "on-tertiary-fixed-variant": "#4a4738",
-        "surface": "#fcf9f8",
-        "surface-dim": "#dcd9d9",
-        "surface-bright": "#fcf9f8",
-        "surface-container-lowest": "#ffffff",
-        "surface-container-low": "#f6f3f2",
-        "surface-container": "#f0eded",
-        "surface-container-high": "#eae7e7",
-        "surface-container-highest": "#e4e2e1",
-        "on-surface": "#1b1c1c",
-        "on-surface-variant": "#50453b",
-        "inverse-surface": "#303030",
-        "inverse-on-surface": "#f3f0f0",
-        "outline": "#82756a",
-        "outline-variant": "#d4c4b7",
-        "surface-tint": "#7d562d",
-        "background": "#fcf9f8",
-        "on-background": "#1b1c1c",
-        "surface-variant": "#e4e2e1",
-        "error": "#ba1a1a",
-        "on-error": "#ffffff",
-        "error-container": "#ffdad6",
-        "on-error-container": "#93000a",
-      },
-      fontFamily: {
-        "serif": ["Libre Caslon Text", "serif"],
-        "sans": ["Manrope", "sans-serif"],
-      },
-      spacing: {
-        "section": "7.5rem",
-        "section-sm": "4rem",
-        "section-gap-desktop": "7.5rem",
-        "section-gap-mobile": "4rem",
-        "grid-margin-desktop": "2rem",
-        "grid-gutter": "2rem",
-      },
-      maxWidth: {
-        "site": "90rem",
-        "container-max-width": "90rem",
-      },
-      fontSize: {
-        "headline-xl": ["3rem", { lineHeight: "1.1" }],
-        "headline-xl-mobile": ["2rem", { lineHeight: "1.15" }],
-        "headline-lg": ["2.25rem", { lineHeight: "1.2" }],
-        "headline-lg-mobile": ["1.75rem", { lineHeight: "1.2" }],
-        "headline-md": ["1.5rem", { lineHeight: "1.3" }],
-        "headline-sm": ["1.25rem", { lineHeight: "1.4" }],
-        "body-lg": ["1.125rem", { lineHeight: "1.7" }],
-        "body-md": ["1rem", { lineHeight: "1.6" }],
-        "body-sm": ["0.875rem", { lineHeight: "1.5" }],
-        "label-md": ["0.75rem", { lineHeight: "1.4", letterSpacing: "0.08em" }],
-      },
-      fontFamily: {
-        "serif": ["Libre Caslon Text", "serif"],
-        "sans": ["Manrope", "sans-serif"],
-        "headline-xl": ["Libre Caslon Text", "serif"],
-        "headline-lg": ["Libre Caslon Text", "serif"],
-        "headline-md": ["Libre Caslon Text", "serif"],
-        "headline-sm": ["Libre Caslon Text", "serif"],
-        "body-lg": ["Manrope", "sans-serif"],
-        "body-md": ["Manrope", "sans-serif"],
-        "body-sm": ["Manrope", "sans-serif"],
-        "label-md": ["Manrope", "sans-serif"],
-      }
-    }
-  }
-}`,
-          }}
-        />
       </head>
       <body className="bg-background text-on-surface font-sans antialiased">
         {children}

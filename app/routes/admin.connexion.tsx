@@ -13,6 +13,7 @@ import {
   verifyPassword,
 } from "~/lib/admin-session.server";
 import type { AdminUserRow } from "~/lib/admin-session.server";
+import { verifyTurnstile } from "~/lib/turnstile.server";
 
 export const meta: MetaFunction = () => [{ title: "Admin — DDM Wigs" }];
 
@@ -28,7 +29,8 @@ async function countAdmins(db: D1Database): Promise<number> {
 export async function loader({ request, context }: LoaderFunctionArgs) {
   if (await isAdminAuthenticated(request, context)) throw redirect("/admin/dashboard");
   const bootstrap = (await countAdmins(context.cloudflare.env.DB)) === 0;
-  return json({ bootstrap });
+  const siteKey = (context.cloudflare.env as any).TURNSTILE_SITE_KEY as string | undefined;
+  return json({ bootstrap, siteKey: siteKey ?? null });
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -45,6 +47,15 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   const form = await request.formData();
+
+  const tsSecret = (context.cloudflare.env as any).TURNSTILE_SECRET as string | undefined;
+  if (tsSecret) {
+    const token = form.get("cf-turnstile-response") as string | null;
+    const ok = await verifyTurnstile(token, tsSecret);
+    if (!ok) {
+      return json({ error: "Vérification de sécurité échouée. Veuillez réessayer." }, { status: 400 });
+    }
+  }
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
 
@@ -116,12 +127,15 @@ const inputCls =
 const labelCls = "block text-white/50 text-xs uppercase tracking-widest mb-2";
 
 export default function AdminConnexion() {
-  const { bootstrap } = useLoaderData<typeof loader>();
+  const { bootstrap, siteKey } = useLoaderData<typeof loader>();
   const data = useActionData<typeof action>();
   const nav = useNavigation();
 
   return (
     <div className="min-h-screen bg-[#1b1c1c] flex items-center justify-center px-4">
+      {siteKey && (
+        <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer />
+      )}
       <div className="w-full max-w-sm">
         <div className="text-center mb-10">
           <p className="text-primary-container font-bold tracking-[0.2em] uppercase text-xl mb-1">DDM Wigs</p>
@@ -165,6 +179,9 @@ export default function AdminConnexion() {
                 <label className={labelCls}>Nouveau mot de passe personnel (12+ caractères)</label>
                 <input type="password" name="new_password" required minLength={12} className={inputCls} autoComplete="new-password" />
               </div>
+            )}
+            {siteKey && (
+              <div className="cf-turnstile" data-sitekey={siteKey} data-theme="dark" />
             )}
             <button
               type="submit"
