@@ -1,6 +1,7 @@
 import { json } from "@remix-run/cloudflare";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
+import { useEffect } from "react";
 import Stripe from "stripe";
 
 export const meta: MetaFunction = () => [{ title: "Commande confirmée — DDM Wigs & More" }];
@@ -43,15 +44,40 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   // Nettoyer le panier côté serveur si on connaît la référence
   const orderRef = ref ?? url.searchParams.get("order_ref");
 
+  // Montant pour les événements de conversion analytics (GA4 purchase / Meta Purchase)
+  let totalCad: number | null = null;
+  if (orderRef) {
+    const row = await context.cloudflare.env.DB
+      .prepare("SELECT total_cad FROM orders WHERE reference = ?")
+      .bind(orderRef)
+      .first<{ total_cad: number }>();
+    totalCad = row?.total_cad ?? null;
+  }
+
   return json({
     orderRef,
+    totalCad,
     success: redirectStatus === "succeeded" || !redirectStatus,
     failed: redirectStatus === "failed" || redirectStatus === "canceled",
   });
 }
 
 export default function CommandeConfirmee() {
-  const { orderRef, success, failed } = useLoaderData<typeof loader>();
+  const { orderRef, totalCad, success, failed } = useLoaderData<typeof loader>();
+
+  // Événement de conversion — une seule fois par commande (dédupliqué en sessionStorage)
+  useEffect(() => {
+    if (!success || !orderRef) return;
+    const key = `conv_${orderRef}`;
+    if (sessionStorage.getItem(key)) return;
+    sessionStorage.setItem(key, "1");
+    window.gtag?.("event", "purchase", {
+      transaction_id: orderRef,
+      value: totalCad ?? undefined,
+      currency: "CAD",
+    });
+    window.fbq?.("track", "Purchase", { value: totalCad ?? 0, currency: "CAD" });
+  }, [success, orderRef, totalCad]);
 
   if (failed) {
     return (

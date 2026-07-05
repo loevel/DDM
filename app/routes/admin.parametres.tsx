@@ -17,6 +17,8 @@ const FIELDS = [
   "tps_number",
   "tvq_number",
   "delivery_delay",
+  "ga4_id",
+  "meta_pixel_id",
 ] as const;
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -233,6 +235,23 @@ export default function AdminParametres() {
             label="Numéro TVQ"
             value={settings.tvq_number ?? ""}
             placeholder="1234567890 TQ0001"
+          />
+        </Section>
+
+        <Section title="Analytics & publicité" icon="monitoring">
+          <Field
+            name="ga4_id"
+            label="ID Google Analytics 4"
+            value={settings.ga4_id ?? ""}
+            placeholder="G-XXXXXXXXXX"
+            hint="Laisser vide pour désactiver. Le suivi ne s'applique jamais à l'admin."
+          />
+          <Field
+            name="meta_pixel_id"
+            label="ID Meta Pixel (Facebook/Instagram)"
+            value={settings.meta_pixel_id ?? ""}
+            placeholder="1234567890"
+            hint="Nécessaire pour le reciblage publicitaire Meta."
           />
         </Section>
 

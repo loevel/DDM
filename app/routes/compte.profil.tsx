@@ -1,8 +1,10 @@
-import { json } from "@remix-run/cloudflare";
+import { json, redirect } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { getCustomer } from "~/lib/auth.server";
-import { getCustomerId } from "~/lib/session.server";
+import { clearSessionCookie, destroySession, getCustomerId, getSessionId } from "~/lib/session.server";
+import { deleteCustomerAccount, isValidEmail, requestEmailChange } from "~/lib/customer-account.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 export const meta: MetaFunction = () => [{ title: "Mon profil — DDM Wigs & More" }];
 
@@ -100,6 +102,36 @@ export async function action({ request, context }: ActionFunctionArgs) {
     return json({ success: "Adresse supprimée." });
   }
 
+  if (intent === "request-email-change") {
+    const allowed = await checkRateLimit(context, request, { name: "email_change", max: 3, windowSeconds: 3600 });
+    if (!allowed) return json({ error: "Trop de demandes. Réessayez dans une heure." });
+    const newEmail = String(form.get("new_email") ?? "").trim().toLowerCase();
+    if (!isValidEmail(newEmail)) {
+      return json({ error: "Adresse email invalide." });
+    }
+    const customer = await getCustomer(customerId, context);
+    if (!customer) return json({ error: "Compte introuvable." });
+    if (newEmail === customer.email) {
+      return json({ error: "C'est déjà l'adresse de votre compte." });
+    }
+    // Réponse identique que l'adresse soit libre ou déjà prise : ne révèle pas
+    // l'existence d'un compte (l'unicité est de toute façon revérifiée au clic)
+    await requestEmailChange(customer, newEmail, context, request);
+    return json({ success: `Si cette adresse est disponible, un lien de confirmation a été envoyé à ${newEmail}. Le changement sera appliqué après votre clic.` });
+  }
+
+  if (intent === "delete-account") {
+    if (String(form.get("confirmation") ?? "").trim().toUpperCase() !== "SUPPRIMER") {
+      return json({ error: "Tapez SUPPRIMER pour confirmer la suppression de votre compte." });
+    }
+    await deleteCustomerAccount(customerId, context);
+    const sessionId = getSessionId(request);
+    if (sessionId) await destroySession(sessionId, context);
+    throw redirect("/?compte=supprime", {
+      headers: { "Set-Cookie": clearSessionCookie() },
+    });
+  }
+
   return json({});
 }
 
@@ -171,7 +203,7 @@ export default function Profil() {
               readOnly
               className="w-full pt-5 pb-2 border-b border-outline-variant/40 bg-transparent font-body-md text-body-md text-on-surface-variant/60 pl-0 cursor-not-allowed"
             />
-            <label className="absolute left-0 -top-1 text-xs text-on-surface-variant font-label-md">Email (non modifiable)</label>
+            <label className="absolute left-0 -top-1 text-xs text-on-surface-variant font-label-md">Email (modifiable dans la section « Adresse email » ci-dessous)</label>
           </div>
           <div className="relative">
             <input type="date" name="date_naissance" id="dob"
@@ -370,6 +402,90 @@ export default function Profil() {
             </div>
             <button type="submit" className="bg-on-surface text-surface font-label-md text-label-md uppercase tracking-wider px-8 py-3 hover:bg-primary transition-colors duration-200">
               Ajouter l'adresse
+            </button>
+          </Form>
+        </details>
+      </div>
+
+      {/* Adresse email */}
+      <div className="bg-surface border border-outline-variant/30 rounded-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-outline-variant/20 bg-surface-container-low">
+          <h2 className="font-headline-sm text-headline-sm text-on-surface">Adresse email</h2>
+        </div>
+        <Form method="post" className="px-6 py-6 space-y-5">
+          <input type="hidden" name="intent" value="request-email-change" />
+          <p className="text-xs text-on-surface-variant">
+            Votre email sert aussi à la connexion. Pour le changer, nous enverrons un lien de
+            confirmation à la nouvelle adresse — le changement ne sera appliqué qu'après votre clic.
+          </p>
+          <div className="relative max-w-md">
+            <input
+              type="email"
+              name="new_email"
+              id="new-email"
+              required
+              placeholder=" "
+              className="peer w-full pt-5 pb-2 border-b border-outline-variant bg-transparent focus:outline-none focus:border-primary font-body-md text-body-md transition-colors pl-0"
+            />
+            <label htmlFor="new-email" className="absolute left-0 top-5 text-on-surface-variant font-label-md text-label-md transition-all duration-300 peer-focus:-top-1 peer-focus:text-xs peer-focus:text-primary peer-[&:not(:placeholder-shown)]:-top-1 peer-[&:not(:placeholder-shown)]:text-xs">
+              Nouvelle adresse email
+            </label>
+          </div>
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-on-surface text-surface font-label-md text-label-md uppercase tracking-wider px-8 py-3 hover:bg-primary transition-colors duration-200 disabled:opacity-60"
+          >
+            {saving ? "Envoi…" : "Envoyer le lien de confirmation"}
+          </button>
+        </Form>
+      </div>
+
+      {/* Suppression du compte */}
+      <div className="bg-surface border border-error/30 rounded-sm overflow-hidden">
+        <div className="px-6 py-4 border-b border-error/20 bg-error-container/30 flex items-center gap-3">
+          <span className="material-symbols-outlined text-error text-xl">warning</span>
+          <h2 className="font-headline-sm text-headline-sm text-on-surface">Supprimer mon compte</h2>
+        </div>
+        <details className="group">
+          <summary className="px-6 py-4 cursor-pointer flex items-center gap-2 text-error font-label-md text-label-md hover:bg-error-container/10 transition-colors list-none">
+            <span className="material-symbols-outlined text-xl">delete_forever</span>
+            Je souhaite supprimer définitivement mon compte
+          </summary>
+          <Form method="post" className="px-6 pb-6 pt-2 space-y-5">
+            <input type="hidden" name="intent" value="delete-account" />
+            <div className="text-body-sm font-body-sm text-on-surface-variant space-y-2">
+              <p>Cette action est <strong>irréversible</strong>. Seront supprimés :</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li>votre profil (nom, téléphone, date de naissance, préférences)</li>
+                <li>vos adresses de livraison et votre liste de favoris</li>
+                <li>votre abonnement à la newsletter</li>
+              </ul>
+              <p>
+                Les registres de commandes sont conservés de façon anonymisée pour la durée exigée
+                par les lois fiscales canadiennes, conformément à la Loi 25.
+              </p>
+            </div>
+            <div className="relative max-w-md">
+              <input
+                type="text"
+                name="confirmation"
+                id="delete-confirm"
+                required
+                placeholder=" "
+                autoComplete="off"
+                className="peer w-full pt-5 pb-2 border-b border-error/50 bg-transparent focus:outline-none focus:border-error font-body-md text-body-md transition-colors pl-0"
+              />
+              <label htmlFor="delete-confirm" className="absolute left-0 top-5 text-on-surface-variant font-label-md text-label-md transition-all duration-300 peer-focus:-top-1 peer-focus:text-xs peer-focus:text-error peer-[&:not(:placeholder-shown)]:-top-1 peer-[&:not(:placeholder-shown)]:text-xs">
+                Tapez SUPPRIMER pour confirmer
+              </label>
+            </div>
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-error text-on-error font-label-md text-label-md uppercase tracking-wider px-8 py-3 hover:opacity-90 transition-opacity disabled:opacity-60"
+            >
+              {saving ? "Suppression…" : "Supprimer définitivement mon compte"}
             </button>
           </Form>
         </details>

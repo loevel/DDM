@@ -1,5 +1,6 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/cloudflare";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 // GET /api/qa?productId=X  → questions répondues
 // POST /api/qa             → soumettre une nouvelle question
@@ -21,6 +22,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
 export async function action({ request, context }: ActionFunctionArgs) {
   if (request.method !== "POST") return json({ error: "Method not allowed" }, { status: 405 });
+
+  const allowed = await checkRateLimit(context, request, { name: "qa", max: 5, windowSeconds: 3600 });
+  if (!allowed) return json({ error: "Trop de tentatives. Réessayez plus tard." }, { status: 429 });
 
   const body = await request.json() as { productId?: number; customerName?: string; question?: string };
   const { productId, customerName, question } = body;

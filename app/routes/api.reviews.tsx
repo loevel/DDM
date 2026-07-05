@@ -4,6 +4,7 @@ import { getDB } from "~/lib/db.server";
 import { getCustomerId } from "~/lib/session.server";
 import { getCustomer } from "~/lib/auth.server";
 import { reviewRewardEmail, sendEmail } from "~/lib/email.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -27,6 +28,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
   }
 
   // Vérifier session
+  const allowed = await checkRateLimit(context, request, { name: "reviews", max: 5, windowSeconds: 3600 });
+  if (!allowed) return json({ error: "Trop de tentatives. Réessayez plus tard." }, { status: 429 });
+
   const customerId = await getCustomerId(request, context as any);
   if (!customerId) {
     return json({ error: "Vous devez être connectée pour laisser un avis.", code: "NOT_AUTHENTICATED" }, { status: 401 });

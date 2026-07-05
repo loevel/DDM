@@ -3,7 +3,9 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { Form, useActionData, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
 import {
   getAdminUser,
+  getAdminSessionId,
   hashPassword,
+  destroyUserSessions,
   logAdminAction,
 } from "~/lib/admin-session.server";
 
@@ -97,6 +99,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (target.id === me.id) return json({ error: "Vous ne pouvez pas désactiver votre propre compte." }, { status: 400 });
     const newActive = target.active === 1 ? 0 : 1;
     await db.prepare("UPDATE admin_users SET active = ?, updated_at = datetime('now') WHERE id = ?").bind(newActive, target.id).run();
+    // Un compte désactivé perd immédiatement ses sessions actives
+    if (!newActive) await destroyUserSessions(context, target.id);
     await logAdminAction(context, {
       admin: me, action: newActive ? "user.reactivate" : "user.deactivate",
       entity: "admin_user", entityId: target.id, details: { email: target.email }, request,
@@ -109,6 +113,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (password.length < 12) return json({ error: "Mot de passe : 12 caractères minimum." }, { status: 400 });
     const hash = await hashPassword(password);
     await db.prepare("UPDATE admin_users SET password_hash = ?, updated_at = datetime('now') WHERE id = ?").bind(hash, target.id).run();
+    // Invalide les sessions du compte ; si l'owner se reset lui-même, sa session courante survit
+    await destroyUserSessions(context, target.id, target.id === me.id ? getAdminSessionId(request) : null);
     await logAdminAction(context, {
       admin: me, action: "user.reset_password", entity: "admin_user", entityId: target.id,
       details: { email: target.email }, request,
@@ -128,6 +134,8 @@ const ACTION_FR: Record<string, string> = {
   "user.deactivate": "Compte désactivé",
   "user.reactivate": "Compte réactivé",
   "user.reset_password": "Mot de passe réinitialisé",
+  "user.change_password": "Mot de passe modifié (par soi-même)",
+  "user.change_password_failed": "Échec changement mot de passe",
   "order.update_status": "Statut commande modifié",
   "product.create": "Produit créé",
   "product.update": "Produit modifié",

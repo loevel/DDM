@@ -135,10 +135,11 @@ export async function getAdminUser(
   if (!sid) return null;
   const val = await context.cloudflare.env.CACHE.get(`admin_session:${sid}`);
   if (!val) return null;
-  // Rétro-compat : anciennes sessions stockées comme "1" (sans identité)
-  if (val === "1") return { id: 0, email: "admin@legacy", name: "Admin", role: "owner" };
   try {
-    return JSON.parse(val) as AdminSessionUser;
+    const parsed = JSON.parse(val) as AdminSessionUser;
+    // Refuse toute session sans identité complète (ex. anciennes sessions "1")
+    if (!parsed || typeof parsed !== "object" || !parsed.id || !parsed.email) return null;
+    return parsed;
   } catch {
     return null;
   }
@@ -175,7 +176,63 @@ export async function createAdminSession(
   await context.cloudflare.env.CACHE.put(`admin_session:${sid}`, JSON.stringify(user), {
     expirationTtl: TTL,
   });
+  if (user.id) await trackUserSession(context, user.id, sid);
   return sid;
+}
+
+// ── Suivi des sessions par utilisateur ───────────────────────────────────────
+// Permet d'invalider toutes les sessions d'un compte (changement de mot de
+// passe, reset par un owner, désactivation). La liste peut contenir des sids
+// déjà expirés : supprimer une clé absente est sans effet.
+
+const userSessionsKey = (userId: number) => `admin_user_sessions:${userId}`;
+
+async function readUserSessions(context: AppLoadContext, userId: number): Promise<string[]> {
+  const raw = await context.cloudflare.env.CACHE.get(userSessionsKey(userId));
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((s): s is string => typeof s === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+async function trackUserSession(
+  context: AppLoadContext,
+  userId: number,
+  sid: string
+): Promise<void> {
+  const sids = await readUserSessions(context, userId);
+  // Cap de sécurité : les sids au-delà sont forcément expirés depuis longtemps
+  const updated = [...sids.filter(s => s !== sid), sid].slice(-20);
+  await context.cloudflare.env.CACHE.put(userSessionsKey(userId), JSON.stringify(updated), {
+    expirationTtl: TTL,
+  });
+}
+
+/**
+ * Invalide toutes les sessions d'un compte, sauf `keepSid` si fourni
+ * (la session de l'admin qui vient de changer son propre mot de passe).
+ */
+export async function destroyUserSessions(
+  context: AppLoadContext,
+  userId: number,
+  keepSid?: string | null
+): Promise<void> {
+  const sids = await readUserSessions(context, userId);
+  await Promise.all(
+    sids.filter(sid => sid !== keepSid).map(sid =>
+      context.cloudflare.env.CACHE.delete(`admin_session:${sid}`)
+    )
+  );
+  if (keepSid && sids.includes(keepSid)) {
+    await context.cloudflare.env.CACHE.put(userSessionsKey(userId), JSON.stringify([keepSid]), {
+      expirationTtl: TTL,
+    });
+  } else {
+    await context.cloudflare.env.CACHE.delete(userSessionsKey(userId));
+  }
 }
 
 export async function destroyAdminSession(

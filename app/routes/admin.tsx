@@ -92,6 +92,7 @@ const NAV = [
   { to: "/admin/recherche",    label: "Recherche",      icon: "search" },
   { to: "/admin/utilisateurs", label: "Utilisateurs",   icon: "admin_panel_settings" },
   { to: "/admin/parametres",   label: "Paramètres",     icon: "settings" },
+  { to: "/admin/mon-compte",   label: "Mon compte",     icon: "account_circle" },
 ] as const;
 
 export default function AdminLayout() {
