@@ -6,7 +6,7 @@ import { getCustomerId } from "~/lib/session.server";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
-  const publicPaths = ["/compte/connexion", "/compte/lien-envoye", "/compte/auth"];
+  const publicPaths = ["/compte/connexion", "/compte/lien-envoye", "/compte/auth", "/compte/changement-email"];
 
   const customerId = await getCustomerId(request, context);
 
@@ -39,7 +39,7 @@ const NAV_LINKS = [
 export default function CompteLayout() {
   const { customer } = useLoaderData<typeof loader>();
   const location = useLocation();
-  const isPublicPage = ["/compte/connexion", "/compte/lien-envoye", "/compte/auth"].includes(
+  const isPublicPage = ["/compte/connexion", "/compte/lien-envoye", "/compte/auth", "/compte/changement-email"].includes(
     location.pathname
   );
 
