@@ -33,7 +33,19 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     .bind(customerId)
     .first<any>();
 
-  return json({ customer, addresses: addresses.results, prefs: prefs ?? {} });
+  // Abonnée si opt-in compte OU inscription active via footer/checkout (table newsletter)
+  let newsletterSubscribed = prefs?.newsletter_optin === 1;
+  if (!newsletterSubscribed && customer?.email) {
+    try {
+      const row = await context.cloudflare.env.DB
+        .prepare("SELECT 1 AS ok FROM newsletter WHERE email = ? AND unsubscribed_at IS NULL")
+        .bind(customer.email.toLowerCase())
+        .first<{ ok: number }>();
+      newsletterSubscribed = !!row;
+    } catch { /* table pas encore migrée */ }
+  }
+
+  return json({ customer, addresses: addresses.results, prefs: prefs ?? {}, newsletterSubscribed });
 }
 
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -69,6 +81,29 @@ export async function action({ request, context }: ActionFunctionArgs) {
         form.get("alertes_stock") === "1" ? 1 : 0,
         customerId
       ).run();
+
+    // Synchroniser la table newsletter (inscriptions footer/checkout) : le profil
+    // fait autorité — décocher doit désabonner partout (exigence LCAP)
+    const customer = await getCustomer(customerId, context);
+    if (customer?.email) {
+      const email = customer.email.toLowerCase();
+      const db = context.cloudflare.env.DB;
+      try {
+        if (form.get("newsletter_optin") === "1") {
+          const ip = request.headers.get("CF-Connecting-IP") ?? null;
+          await db.prepare(`
+            UPDATE newsletter
+            SET unsubscribed_at = NULL, consent_ip = ?, subscribed_at = datetime('now')
+            WHERE email = ? AND unsubscribed_at IS NOT NULL
+          `).bind(ip, email).run();
+        } else {
+          await db.prepare(
+            "UPDATE newsletter SET unsubscribed_at = datetime('now') WHERE email = ? AND unsubscribed_at IS NULL"
+          ).bind(email).run();
+        }
+      } catch { /* table pas encore migrée */ }
+    }
+
     return json({ success: "Préférences enregistrées." });
   }
 
@@ -136,7 +171,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 }
 
 export default function Profil() {
-  const { customer, addresses, prefs } = useLoaderData<typeof loader>();
+  const { customer, addresses, prefs, newsletterSubscribed } = useLoaderData<typeof loader>();
   const actionData = useActionData<typeof action>();
   const nav = useNavigation();
   const saving = nav.state === "submitting";
@@ -307,7 +342,7 @@ export default function Profil() {
             <label className="flex items-center gap-3 cursor-pointer">
               <input type="hidden" name="newsletter_optin" value="0" />
               <input type="checkbox" name="newsletter_optin" value="1"
-                defaultChecked={(prefs as any)?.newsletter_optin === 1}
+                defaultChecked={newsletterSubscribed}
                 className="w-4 h-4 accent-primary" />
               <span className="font-body-md text-body-md">Recevoir la newsletter (nouveautés, promotions exclusives)</span>
             </label>
