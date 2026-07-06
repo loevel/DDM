@@ -75,6 +75,7 @@ export default function Checkout() {
   });
   const [promoCode, setPromoCode] = useState("");
   const [giftCardCode, setGiftCardCode] = useState("");
+  const [newsletterOptin, setNewsletterOptin] = useState(false);
   const [referralCode] = useState(() => {
     if (typeof document === "undefined") return null;
     const m = document.cookie.match(/(?:^|;\s*)ddm_ref=([^;]+)/);
@@ -143,6 +144,7 @@ export default function Checkout() {
           promoCode: promoCode || undefined,
           referralCode: referralCode || undefined,
           giftCardCode: giftCardCode || undefined,
+          newsletterOptin: newsletterOptin || undefined,
         }),
       });
       const data = await res.json() as { clientSecret?: string; paidInFull?: boolean; orderRef?: string; breakdown?: Breakdown; error?: string };
@@ -226,6 +228,8 @@ export default function Checkout() {
                 onPromoChange={setPromoCode}
                 giftCardCode={giftCardCode}
                 onGiftCardChange={setGiftCardCode}
+                newsletterOptin={newsletterOptin}
+                onNewsletterChange={setNewsletterOptin}
                 onSubmit={handleInfoSubmit}
                 submitting={submitting}
                 error={error}
@@ -269,7 +273,7 @@ export default function Checkout() {
 // ─── Étape 1 : Coordonnées ────────────────────────────────────────────────────
 
 function InfoStep({
-  customerInfo, onChange, promoCode, onPromoChange, giftCardCode, onGiftCardChange, onSubmit, submitting, error,
+  customerInfo, onChange, promoCode, onPromoChange, giftCardCode, onGiftCardChange, newsletterOptin, onNewsletterChange, onSubmit, submitting, error,
 }: {
   customerInfo: CustomerInfo;
   onChange: (v: CustomerInfo) => void;
@@ -277,6 +281,8 @@ function InfoStep({
   onPromoChange: (v: string) => void;
   giftCardCode: string;
   onGiftCardChange: (v: string) => void;
+  newsletterOptin: boolean;
+  onNewsletterChange: (v: boolean) => void;
   onSubmit: (e: React.FormEvent) => void;
   submitting: boolean;
   error: string | null;
@@ -354,6 +360,22 @@ function InfoStep({
             className={`${inp} font-mono uppercase`} />
         </div>
       </div>
+
+      {/* Opt-in newsletter — non pré-coché (consentement exprès LCAP) */}
+      <label className="flex items-start gap-3 cursor-pointer select-none">
+        <input
+          type="checkbox"
+          checked={newsletterOptin}
+          onChange={e => onNewsletterChange(e.target.checked)}
+          className="mt-0.5 w-4 h-4 border-outline-variant text-primary focus:ring-primary"
+        />
+        <span className="font-sans text-sm text-on-surface-variant">
+          Je souhaite recevoir les nouveautés, conseils et offres exclusives de DDM Wigs par courriel.
+          <span className="block text-xs text-on-surface-variant/70 mt-0.5">
+            Désabonnement possible à tout moment via le lien dans chaque courriel.
+          </span>
+        </span>
+      </label>
 
       {error && (
         <div className="flex items-start gap-3 p-4 bg-error/5 border border-error/30">

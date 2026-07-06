@@ -17,7 +17,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   const body = await request.json();
 
-  const { cartId, customerInfo, promoCode, referralCode, giftCardCode } = body;
+  const { cartId, customerInfo, promoCode, referralCode, giftCardCode, newsletterOptin } = body;
 
   if (!cartId || !customerInfo?.name || !customerInfo?.email) {
     return json({ error: "Données incomplètes." }, { status: 400 });
@@ -194,6 +194,31 @@ export async function action({ request, context }: ActionFunctionArgs) {
         VALUES (?,?,?,?,?,?,?,?,?)`)
       .bind(order.id, item.productId, item.name, item.slug, item.image_key, item.quantity, item.price_cad, item.variantId ?? null, item.variantName ?? null)
       .run();
+  }
+
+  // Opt-in newsletter coché au checkout : preuve de consentement LCAP (date + IP)
+  if (newsletterOptin === true) {
+    const email = customerInfo.email.trim().toLowerCase();
+    const ip = request.headers.get("CF-Connecting-IP") ?? null;
+    try {
+      await db.prepare(
+        "INSERT INTO newsletter (email, consent_ip, unsub_token) VALUES (?, ?, ?)"
+      ).bind(email, ip, crypto.randomUUID().replace(/-/g, "")).run();
+    } catch (e: any) {
+      if (e.message?.includes("UNIQUE")) {
+        try {
+          await db.prepare(`
+            UPDATE newsletter
+            SET unsubscribed_at = NULL, consent_ip = ?, subscribed_at = datetime('now')
+            WHERE email = ? AND unsubscribed_at IS NOT NULL
+          `).bind(ip, email).run();
+        } catch { /* non bloquant */ }
+      }
+    }
+    try {
+      await db.prepare("UPDATE customers SET newsletter_optin = 1 WHERE email = ?")
+        .bind(email).run();
+    } catch { /* non bloquant */ }
   }
 
   // Enregistrer le parrainage et créditer le parrain

@@ -1,4 +1,67 @@
 import { Link } from "@remix-run/react";
+import { useState } from "react";
+
+function FooterNewsletter() {
+  const [email, setEmail] = useState("");
+  const [state, setState] = useState<"idle" | "loading" | "done" | "error">("idle");
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!email.includes("@") || state === "loading") return;
+    setState("loading");
+    try {
+      const res = await fetch("/api/newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      setState(res.ok ? "done" : "error");
+    } catch {
+      setState("error");
+    }
+  }
+
+  return (
+    <div className="max-w-[90rem] mx-auto px-10 lg:px-20 py-10 border-b border-[#d4c4b7]/50">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+        <div>
+          <h4 className="font-serif text-xl text-on-surface mb-1">Rejoignez le Cercle Privé</h4>
+          <p className="font-sans text-sm text-on-surface-variant">
+            Nouveautés, conseils capillaires et offres exclusives — directement dans votre boîte courriel.
+          </p>
+        </div>
+        {state === "done" ? (
+          <p className="flex items-center gap-2 font-sans text-sm text-secondary font-semibold">
+            <span className="material-symbols-outlined text-lg">check_circle</span>
+            Merci pour votre inscription !
+          </p>
+        ) : (
+          <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row gap-3 md:min-w-[24rem]">
+            <input
+              type="email"
+              required
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              placeholder="votre@courriel.com"
+              aria-label="Adresse courriel"
+              className="flex-grow bg-transparent border-0 border-b border-outline focus:ring-0 focus:border-primary font-sans text-sm placeholder:text-on-surface-variant/50 px-0 py-2 text-on-surface"
+            />
+            <button
+              type="submit"
+              disabled={state === "loading"}
+              className="shrink-0 px-6 py-2.5 bg-primary text-on-primary font-sans text-xs font-bold uppercase tracking-widest hover:opacity-90 disabled:opacity-50 transition-opacity"
+            >
+              {state === "loading" ? "Envoi…" : "S'inscrire"}
+            </button>
+          </form>
+        )}
+      </div>
+      {state === "error" && (
+        <p className="font-sans text-xs text-error mt-2">Une erreur est survenue. Veuillez réessayer.</p>
+      )}
+    </div>
+  );
+}
 
 function VisaLogo() {
   return (
@@ -59,6 +122,7 @@ function GooglePayLogo() {
 export function Footer() {
   return (
     <footer className="w-full mt-28 bg-[#f6f3f2] border-t border-[#d4c4b7]">
+      <FooterNewsletter />
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 px-10 lg:px-20 py-16 max-w-[90rem] mx-auto">
         <div className="space-y-5">
           <span className="font-serif text-2xl text-on-surface tracking-tight block">DDM Wigs &amp; More</span>
