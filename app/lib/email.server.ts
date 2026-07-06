@@ -421,6 +421,70 @@ export function contactNotificationEmail(opts: {
   };
 }
 
+/** Bloc visuel de la carte cadeau (code encadré doré, montant). */
+function giftCardBlock(code: string, amountCad: number): string {
+  return `
+    <div style="background:#fdf6f0;border:2px dashed #c9a87c;border-radius:4px;padding:24px 20px;margin:20px 0;text-align:center;">
+      <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:11px;color:#9b8b7a;text-transform:uppercase;letter-spacing:2px;">Votre carte cadeau</p>
+      <p style="margin:0 0 8px;font-family:Georgia,serif;font-size:34px;font-weight:bold;color:#1a1a1a;">${amountCad.toFixed(2)}&nbsp;$ <span style="font-size:16px;color:#9b8b7a;font-weight:normal;">CAD</span></p>
+      <p style="margin:0;font-family:'Courier New',monospace;font-size:20px;font-weight:bold;color:#c9a87c;letter-spacing:3px;">${escapeHtml(code)}</p>
+    </div>`;
+}
+
+export function giftCardRecipientEmail(opts: {
+  recipientName: string;
+  buyerName: string;
+  code: string;
+  amountCad: number;
+  message?: string;
+}): { subject: string; html: string } {
+  const messageBlock = opts.message
+    ? `<p style="margin:0 0 14px;font-family:Georgia,serif;font-size:15px;color:#6b5e52;line-height:1.7;font-style:italic;border-left:3px solid #c9a87c;padding-left:16px;white-space:pre-wrap;">« ${escapeHtml(opts.message)} »</p>`
+    : "";
+  return {
+    subject: `${opts.buyerName} vous offre une carte cadeau DDM Wigs 🎁`,
+    html: emailLayout({
+      eyebrow: "Un cadeau pour vous",
+      title: "Vous avez reçu une carte cadeau !",
+      content:
+        p(`Bonjour ${escapeHtml(opts.recipientName || "")},`.replace(" ,", ",")) +
+        p(`<strong>${escapeHtml(opts.buyerName)}</strong> vous offre une carte cadeau à dépenser sur toute la boutique DDM Wigs &amp; More — perruques, extensions, accessoires et plus encore.`) +
+        messageBlock +
+        giftCardBlock(opts.code, opts.amountCad),
+      cta: { label: "Magasiner maintenant →", url: `${SITE_URL}/boutique` },
+      note: "Entrez ce code au moment du paiement. Utilisable en plusieurs fois, sans date d'expiration.",
+      footerReason: "Vous recevez cet email car une carte cadeau vous a été offerte sur ddmwigs.com.",
+    }),
+  };
+}
+
+export function giftCardBuyerEmail(opts: {
+  buyerName: string;
+  recipientName?: string;
+  recipientEmail?: string;
+  code: string;
+  amountCad: number;
+  sentToRecipient: boolean;
+}): { subject: string; html: string } {
+  const delivery = opts.sentToRecipient && opts.recipientEmail
+    ? p(`La carte a été envoyée par courriel à <strong>${escapeHtml(opts.recipientName || opts.recipientEmail)}</strong> (${escapeHtml(opts.recipientEmail)}). En voici une copie pour vos dossiers :`)
+    : p("Voici votre carte cadeau — transmettez ce code à la personne de votre choix :");
+  return {
+    subject: `Votre carte cadeau de ${opts.amountCad.toFixed(2)} $ est prête 🎁`,
+    html: emailLayout({
+      eyebrow: "Merci pour votre achat",
+      title: "Carte cadeau confirmée",
+      content:
+        p(`Bonjour ${escapeHtml(opts.buyerName)},`) +
+        p("Merci ! Votre paiement a bien été reçu.") +
+        delivery +
+        giftCardBlock(opts.code, opts.amountCad),
+      note: "Le code est utilisable en boutique en ligne, en plusieurs fois, sans date d'expiration.",
+      footerReason: "Vous recevez cet email suite à votre achat d'une carte cadeau sur ddmwigs.com.",
+    }),
+  };
+}
+
 export function contactReplyEmail(opts: {
   nom: string;
   sujet?: string;

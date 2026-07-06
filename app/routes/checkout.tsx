@@ -55,7 +55,9 @@ interface Breakdown {
   subtotal: number;
   discount: number;
   taxes: { label: string; amount: number }[];
+  giftCard?: number;
   total: number;
+  toPay?: number;
 }
 
 // ─── Page principale ──────────────────────────────────────────────────────────
@@ -72,6 +74,7 @@ export default function Checkout() {
     name: "", email: "", phone: "", line1: "", city: "", province: "QC", postal_code: "",
   });
   const [promoCode, setPromoCode] = useState("");
+  const [giftCardCode, setGiftCardCode] = useState("");
   const [referralCode] = useState(() => {
     if (typeof document === "undefined") return null;
     const m = document.cookie.match(/(?:^|;\s*)ddm_ref=([^;]+)/);
@@ -112,8 +115,8 @@ export default function Checkout() {
       }).catch(() => {});
   }, []);
 
-  // Le total facturé vient du serveur (remise + taxes) dès l'étape paiement
-  const finalTotal = breakdown?.total ?? cart.total;
+  // Le total facturé vient du serveur (remise + taxes − carte cadeau)
+  const finalTotal = breakdown?.toPay ?? breakdown?.total ?? cart.total;
   const stripePromise = publishableKey ? loadStripe(publishableKey) : null;
 
   // Passer à l'étape paiement : créer le PaymentIntent
@@ -135,13 +138,27 @@ export default function Checkout() {
       const res = await fetch("/api/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cartId, customerInfo, promoCode: promoCode || undefined, referralCode: referralCode || undefined }),
+        body: JSON.stringify({
+          cartId, customerInfo,
+          promoCode: promoCode || undefined,
+          referralCode: referralCode || undefined,
+          giftCardCode: giftCardCode || undefined,
+        }),
       });
-      const data = await res.json() as { clientSecret?: string; orderRef?: string; breakdown?: Breakdown; error?: string };
-      if (!res.ok || !data.clientSecret) throw new Error(data.error ?? "Erreur serveur.");
-      setClientSecret(data.clientSecret);
+      const data = await res.json() as { clientSecret?: string; paidInFull?: boolean; orderRef?: string; breakdown?: Breakdown; error?: string };
+      if (!res.ok) throw new Error(data.error ?? "Erreur serveur.");
+
       setOrderRef(data.orderRef ?? null);
       setBreakdown(data.breakdown ?? null);
+
+      // Commande entièrement couverte par la carte cadeau : pas de paiement
+      if (data.paidInFull) {
+        handlePaymentSuccess();
+        return;
+      }
+
+      if (!data.clientSecret) throw new Error(data.error ?? "Erreur serveur.");
+      setClientSecret(data.clientSecret);
       setStep("payment");
     } catch (err: any) {
       setError(err.message ?? "Une erreur est survenue.");
@@ -207,6 +224,8 @@ export default function Checkout() {
                 onChange={setCustomerInfo}
                 promoCode={promoCode}
                 onPromoChange={setPromoCode}
+                giftCardCode={giftCardCode}
+                onGiftCardChange={setGiftCardCode}
                 onSubmit={handleInfoSubmit}
                 submitting={submitting}
                 error={error}
@@ -250,12 +269,14 @@ export default function Checkout() {
 // ─── Étape 1 : Coordonnées ────────────────────────────────────────────────────
 
 function InfoStep({
-  customerInfo, onChange, promoCode, onPromoChange, onSubmit, submitting, error,
+  customerInfo, onChange, promoCode, onPromoChange, giftCardCode, onGiftCardChange, onSubmit, submitting, error,
 }: {
   customerInfo: CustomerInfo;
   onChange: (v: CustomerInfo) => void;
   promoCode: string;
   onPromoChange: (v: string) => void;
+  giftCardCode: string;
+  onGiftCardChange: (v: string) => void;
   onSubmit: (e: React.FormEvent) => void;
   submitting: boolean;
   error: string | null;
@@ -318,12 +339,20 @@ function InfoStep({
         </div>
       </div>
 
-      {/* Code promo */}
-      <div>
-        <h2 className="font-sans text-sm font-bold uppercase tracking-wider text-on-surface mb-4">Code promo (optionnel)</h2>
-        <input value={promoCode} onChange={e => onPromoChange(e.target.value.toUpperCase())}
-          placeholder="DDM-XXXXX"
-          className={`${inp} w-full sm:w-64 font-mono uppercase`} />
+      {/* Codes promo et carte cadeau */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <h2 className="font-sans text-sm font-bold uppercase tracking-wider text-on-surface mb-4">Code promo (optionnel)</h2>
+          <input value={promoCode} onChange={e => onPromoChange(e.target.value.toUpperCase())}
+            placeholder="DDM-XXXXX"
+            className={`${inp} font-mono uppercase`} />
+        </div>
+        <div>
+          <h2 className="font-sans text-sm font-bold uppercase tracking-wider text-on-surface mb-4">Carte cadeau (optionnel)</h2>
+          <input value={giftCardCode} onChange={e => onGiftCardChange(e.target.value.toUpperCase())}
+            placeholder="DDM-XXXX-XXXX-XXXX"
+            className={`${inp} font-mono uppercase`} />
+        </div>
       </div>
 
       {error && (
@@ -534,6 +563,18 @@ function OrderSummary({ cart, breakdown, deliveryDelay }: { cart: Cart; breakdow
           <span>Total</span>
           <span>{(breakdown?.total ?? cart.total).toFixed(2)} $ CAD</span>
         </div>
+        {breakdown && (breakdown.giftCard ?? 0) > 0 && (
+          <>
+            <div className="flex justify-between font-sans text-sm text-secondary font-semibold">
+              <span>Carte cadeau</span>
+              <span>−{(breakdown.giftCard ?? 0).toFixed(2)} $ CAD</span>
+            </div>
+            <div className="flex justify-between font-sans text-base font-bold text-on-surface">
+              <span>À payer</span>
+              <span>{(breakdown.toPay ?? breakdown.total).toFixed(2)} $ CAD</span>
+            </div>
+          </>
+        )}
         {!breakdown && (
           <p className="font-sans text-[10px] text-on-surface-variant">
             Remise et taxes applicables calculées à l'étape suivante · CAD
