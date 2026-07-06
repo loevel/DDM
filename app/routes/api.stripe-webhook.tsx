@@ -1,5 +1,8 @@
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import Stripe from "stripe";
+import { giftCardBuyerEmail, giftCardRecipientEmail, sendEmail } from "~/lib/email.server";
+import { createGiftCard } from "~/lib/gift-cards.server";
+import { applyPostPaymentEffects } from "~/lib/order-fulfillment.server";
 
 // POST /api/stripe-webhook  (Stripe → confirme le paiement)
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -28,6 +31,60 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (event.type === "payment_intent.succeeded") {
     const pi = event.data.object as Stripe.PaymentIntent;
 
+    // ── Achat de carte cadeau : créer la carte + envoyer les courriels ──────
+    if (pi.metadata?.type === "gift_card") {
+      const purchase = await db
+        .prepare("SELECT * FROM gift_card_purchases WHERE stripe_payment_intent_id = ? AND status = 'pending'")
+        .bind(pi.id)
+        .first<{
+          id: number; amount_cad: number; buyer_name: string; buyer_email: string;
+          recipient_name: string | null; recipient_email: string | null; message: string | null;
+        }>();
+
+      // Déjà traité (webhook rejoué) ou intention introuvable → rien à faire
+      if (!purchase) return new Response("ok", { status: 200 });
+
+      const card = await createGiftCard(db, {
+        amountCad: purchase.amount_cad,
+        recipientName: purchase.recipient_name,
+        recipientEmail: purchase.recipient_email,
+        note: `Achat en ligne par ${purchase.buyer_name} (${purchase.buyer_email})`,
+      });
+
+      await db
+        .prepare("UPDATE gift_card_purchases SET status = 'completed', gift_card_id = ?, updated_at = datetime('now') WHERE id = ?")
+        .bind(card.id, purchase.id)
+        .run();
+
+      const apiKey = env.RESEND_API_KEY as string | undefined;
+      if (apiKey) {
+        const sentToRecipient = Boolean(purchase.recipient_email);
+        try {
+          if (purchase.recipient_email) {
+            const rcpt = giftCardRecipientEmail({
+              recipientName: purchase.recipient_name ?? "",
+              buyerName: purchase.buyer_name,
+              code: card.code,
+              amountCad: purchase.amount_cad,
+              message: purchase.message ?? undefined,
+            });
+            await sendEmail({ apiKey, to: purchase.recipient_email, subject: rcpt.subject, html: rcpt.html });
+          }
+          const buyer = giftCardBuyerEmail({
+            buyerName: purchase.buyer_name,
+            recipientName: purchase.recipient_name ?? undefined,
+            recipientEmail: purchase.recipient_email ?? undefined,
+            code: card.code,
+            amountCad: purchase.amount_cad,
+            sentToRecipient,
+          });
+          await sendEmail({ apiKey, to: purchase.buyer_email, subject: buyer.subject, html: buyer.html });
+        } catch { /* la carte est créée — l'admin peut renvoyer le code au besoin */ }
+      }
+
+      return new Response("ok", { status: 200 });
+    }
+
     await db
       .prepare(`UPDATE orders SET
         payment_status = 'paid',
@@ -38,131 +95,29 @@ export async function action({ request, context }: ActionFunctionArgs) {
       .bind(pi.payment_method_types?.[0] ?? "card", pi.id)
       .run();
 
-    // Décrémenter stock + créer mouvements de vente pour chaque article
+    // Effets post-paiement (stock, promo, carte cadeau, panier, adresse)
     try {
       const paidOrder = await db
         .prepare("SELECT id FROM orders WHERE stripe_payment_intent_id = ?")
         .bind(pi.id)
         .first<{ id: number }>();
-
-      if (paidOrder) {
-        const { results: items } = await db
-          .prepare("SELECT product_id, quantity, unit_price_cad, variant_id FROM order_items WHERE order_id = ?")
-          .bind(paidOrder.id)
-          .all<{ product_id: number; quantity: number; unit_price_cad: number; variant_id: number | null }>();
-
-        for (const item of items ?? []) {
-          if (!item.product_id) continue;
-
-          // Décrémenter le stock de la variante si applicable
-          if (item.variant_id) {
-            const variant = await db
-              .prepare("SELECT stock FROM product_variants WHERE id = ?")
-              .bind(item.variant_id)
-              .first<{ stock: number }>();
-            if (variant) {
-              const newVStock = Math.max(0, variant.stock - item.quantity);
-              await db.prepare("UPDATE product_variants SET stock = ? WHERE id = ?")
-                .bind(newVStock, item.variant_id).run();
-            }
-          }
-
-          const product = await db
-            .prepare("SELECT stock FROM products WHERE id = ?")
-            .bind(item.product_id)
-            .first<{ stock: number }>();
-          if (!product) continue;
-
-          const stockAvant = product.stock;
-          const stockApres = Math.max(0, stockAvant - item.quantity);
-
-          await db.prepare("UPDATE products SET stock = ? WHERE id = ?")
-            .bind(stockApres, item.product_id).run();
-
-          await db.prepare(`INSERT INTO stock_mouvements
-            (product_id, type, quantite, stock_avant, stock_apres, cout_unitaire_cad, reference_type, reference_id)
-            VALUES (?, 'vente', ?, ?, ?, ?, 'order', ?)`)
-            .bind(item.product_id, item.quantity, stockAvant, stockApres, item.unit_price_cad, paidOrder.id)
-            .run();
-        }
-      }
-    } catch { /* ne pas bloquer le webhook si erreur stock */ }
-
-    // Décompter l'utilisation du code promo (au paiement confirmé seulement,
-    // pour ne pas brûler les usages sur des checkouts abandonnés)
-    try {
-      const orderPromo = await db
-        .prepare("SELECT promo_code FROM orders WHERE stripe_payment_intent_id = ?")
-        .bind(pi.id)
-        .first<{ promo_code: string | null }>();
-      if (orderPromo?.promo_code) {
-        await db.prepare("UPDATE promo_codes SET used_count = used_count + 1 WHERE code = ?")
-          .bind(orderPromo.promo_code).run();
-      }
+      if (paidOrder) await applyPostPaymentEffects(db, paidOrder.id);
     } catch { /* ne pas bloquer le webhook */ }
-
-    // Marquer le panier abandonné comme récupéré
-    try {
-      const paidOrderForCart = await db
-        .prepare("SELECT customer_email, reference FROM orders WHERE stripe_payment_intent_id = ?")
-        .bind(pi.id)
-        .first<{ customer_email: string; reference: string }>();
-
-      if (paidOrderForCart?.customer_email) {
-        await db.prepare(`
-          UPDATE abandoned_carts
-          SET status = 'recovered',
-              order_reference = ?,
-              updated_at = datetime('now')
-          WHERE email = ? AND status IN ('active', 'abandoned')
-        `).bind(paidOrderForCart.reference, paidOrderForCart.customer_email).run();
-      }
-    } catch { /* ne pas bloquer le webhook */ }
-
-    // Sauvegarder l'adresse de livraison si la cliente n'en a pas encore
-    try {
-      const order = await db
-        .prepare("SELECT customer_email, shipping_address FROM orders WHERE stripe_payment_intent_id = ?")
-        .bind(pi.id)
-        .first<{ customer_email: string; shipping_address: string }>();
-
-      if (order?.shipping_address) {
-        const addr = JSON.parse(order.shipping_address) as {
-          line1?: string; city?: string; province?: string; postal_code?: string;
-        };
-
-        if (addr.line1 && addr.city && addr.postal_code) {
-          const customer = await db
-            .prepare("SELECT id FROM customers WHERE email = ?")
-            .bind(order.customer_email)
-            .first<{ id: string }>();
-
-          if (customer) {
-            const existing = await db
-              .prepare("SELECT COUNT(*) as n FROM customer_addresses WHERE customer_id = ?")
-              .bind(customer.id)
-              .first<{ n: number }>();
-
-            if (!existing || existing.n === 0) {
-              await db
-                .prepare(`INSERT INTO customer_addresses
-                  (customer_id, label, street, city, province, postal_code, country, is_default)
-                  VALUES (?, 'Domicile', ?, ?, ?, ?, 'Canada', 1)`)
-                .bind(customer.id, addr.line1, addr.city, addr.province ?? "QC", addr.postal_code)
-                .run();
-            }
-          }
-        }
-      }
-    } catch { /* ne pas bloquer si la sauvegarde échoue */ }
   }
 
   if (event.type === "payment_intent.payment_failed") {
     const pi = event.data.object as Stripe.PaymentIntent;
-    await db
-      .prepare("UPDATE orders SET payment_status = 'failed', status = 'cancelled' WHERE stripe_payment_intent_id = ?")
-      .bind(pi.id)
-      .run();
+    if (pi.metadata?.type === "gift_card") {
+      await db
+        .prepare("UPDATE gift_card_purchases SET status = 'failed', updated_at = datetime('now') WHERE stripe_payment_intent_id = ? AND status = 'pending'")
+        .bind(pi.id)
+        .run();
+    } else {
+      await db
+        .prepare("UPDATE orders SET payment_status = 'failed', status = 'cancelled' WHERE stripe_payment_intent_id = ?")
+        .bind(pi.id)
+        .run();
+    }
   }
 
   return new Response("ok", { status: 200 });

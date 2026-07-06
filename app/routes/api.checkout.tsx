@@ -1,10 +1,12 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import Stripe from "stripe";
+import { getActiveGiftCard } from "~/lib/gift-cards.server";
+import { applyPostPaymentEffects } from "~/lib/order-fulfillment.server";
 import { computeTaxes, getTaxSettings } from "~/lib/taxes.server";
 
-// POST /api/checkout  { cartId, customerInfo, promoCode? }
-//   → { clientSecret, orderRef }
+// POST /api/checkout  { cartId, customerInfo, promoCode?, giftCardCode? }
+//   → { clientSecret, orderRef } | { paidInFull: true, orderRef }
 export async function action({ request, context }: ActionFunctionArgs) {
   const env = context.cloudflare.env;
   const stripeSecret = env.STRIPE_SECRET_KEY as string | undefined;
@@ -15,7 +17,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   const body = await request.json();
 
-  const { cartId, customerInfo, promoCode, referralCode } = body;
+  const { cartId, customerInfo, promoCode, referralCode, giftCardCode } = body;
 
   if (!cartId || !customerInfo?.name || !customerInfo?.email) {
     return json({ error: "Données incomplètes." }, { status: 400 });
@@ -122,9 +124,31 @@ export async function action({ request, context }: ActionFunctionArgs) {
     : { tps: 0, tvq: 0, tpsLabel: "", tvqLabel: null };
 
   const totalCad = Math.round((taxableCad + taxes.tps + taxes.tvq) * 100) / 100;
-  const amountCents = Math.round(totalCad * 100);
 
-  if (amountCents < 50) return json({ error: "Montant minimum : 0.50 $." }, { status: 400 });
+  // Carte cadeau : appliquée après taxes (c'est un mode de paiement, pas une
+  // remise). Le solde n'est débité qu'au paiement confirmé.
+  let giftCad = 0;
+  let validGiftCode: string | null = null;
+  if (giftCardCode) {
+    const card = await getActiveGiftCard(db, String(giftCardCode));
+    if (!card) {
+      return json({ error: "Code de carte cadeau invalide ou solde épuisé." }, { status: 400 });
+    }
+    giftCad = Math.min(card.balance_cad, totalCad);
+    // Stripe exige un minimum de 0,50 $ : si la carte couvre presque tout,
+    // on laisse 0,50 $ à payer et le reste demeure sur la carte
+    const remainder = Math.round((totalCad - giftCad) * 100) / 100;
+    if (remainder > 0 && remainder < 0.5) {
+      giftCad = Math.round((totalCad - 0.5) * 100) / 100;
+    }
+    giftCad = Math.round(giftCad * 100) / 100;
+    validGiftCode = card.code;
+  }
+
+  const chargeCad = Math.round((totalCad - giftCad) * 100) / 100;
+  const amountCents = Math.round(chargeCad * 100);
+
+  if (!validGiftCode && amountCents < 50) return json({ error: "Montant minimum : 0.50 $." }, { status: 400 });
 
   // Créer la référence de commande
   const ref = "DDM-" + Date.now().toString(36).toUpperCase();
@@ -133,9 +157,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const order = await db
     .prepare(`INSERT INTO orders
       (reference, customer_name, customer_email, customer_phone, type,
-       total_cad, discount_cad, tps_cad, tvq_cad, promo_code, payment_status, status,
-       shipping_address)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`)
+       total_cad, discount_cad, tps_cad, tvq_cad, promo_code, gift_card_code, gift_card_cad,
+       payment_status, status, shipping_address)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`)
     .bind(
       ref,
       customerInfo.name.trim(),
@@ -147,6 +171,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
       taxes.tps,
       taxes.tvq,
       validPromo,
+      validGiftCode,
+      giftCad,
       "pending",
       "pending",
       JSON.stringify({
@@ -168,6 +194,40 @@ export async function action({ request, context }: ActionFunctionArgs) {
         VALUES (?,?,?,?,?,?,?,?,?)`)
       .bind(order.id, item.productId, item.name, item.slug, item.image_key, item.quantity, item.price_cad, item.variantId ?? null, item.variantName ?? null)
       .run();
+  }
+
+  // Enregistrer le parrainage et créditer le parrain
+  if (referrerEmail) {
+    try {
+      await db.prepare(
+        "INSERT INTO referrals (referrer_email, referred_email, code, status, reward_cad, discount_cad, order_reference, rewarded_at) VALUES (?,?,?,?,?,?,?,datetime('now'))"
+      ).bind(referrerEmail, customerInfo.email.trim().toLowerCase(), referralCode!.toUpperCase(), "rewarded", 15, 10, ref).run();
+      await db.prepare(
+        "UPDATE customers SET referral_credit_cad = referral_credit_cad + 15 WHERE email = ?"
+      ).bind(referrerEmail).run();
+    } catch { /* ignorer silencieusement */ }
+  }
+
+  const breakdown = {
+    subtotal: Math.round(subtotal * 100) / 100,
+    discount: discountCad,
+    taxes: [
+      ...(taxes.tps > 0 ? [{ label: taxes.tpsLabel, amount: taxes.tps }] : []),
+      ...(taxes.tvq > 0 && taxes.tvqLabel ? [{ label: taxes.tvqLabel, amount: taxes.tvq }] : []),
+    ],
+    giftCard: giftCad,
+    total: totalCad,
+    toPay: chargeCad,
+  };
+
+  // Commande entièrement couverte par la carte cadeau : aucun paiement Stripe
+  if (chargeCad === 0) {
+    await db
+      .prepare("UPDATE orders SET payment_status = 'paid', payment_method = 'gift_card', status = 'confirmed', updated_at = datetime('now') WHERE id = ?")
+      .bind(order.id)
+      .run();
+    await applyPostPaymentEffects(db, order.id);
+    return json({ paidInFull: true, orderRef: ref, breakdown });
   }
 
   // Créer le PaymentIntent Stripe
@@ -192,29 +252,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     .bind(paymentIntent.id, order.id)
     .run();
 
-  // Enregistrer le parrainage et créditer le parrain
-  if (referrerEmail) {
-    try {
-      await db.prepare(
-        "INSERT INTO referrals (referrer_email, referred_email, code, status, reward_cad, discount_cad, order_reference, rewarded_at) VALUES (?,?,?,?,?,?,?,datetime('now'))"
-      ).bind(referrerEmail, customerInfo.email.trim().toLowerCase(), referralCode!.toUpperCase(), "rewarded", 15, 10, ref).run();
-      await db.prepare(
-        "UPDATE customers SET referral_credit_cad = referral_credit_cad + 15 WHERE email = ?"
-      ).bind(referrerEmail).run();
-    } catch { /* ignorer silencieusement */ }
-  }
-
   return json({
     clientSecret: paymentIntent.client_secret,
     orderRef: ref,
-    breakdown: {
-      subtotal: Math.round(subtotal * 100) / 100,
-      discount: discountCad,
-      taxes: [
-        ...(taxes.tps > 0 ? [{ label: taxes.tpsLabel, amount: taxes.tps }] : []),
-        ...(taxes.tvq > 0 && taxes.tvqLabel ? [{ label: taxes.tvqLabel, amount: taxes.tvq }] : []),
-      ],
-      total: totalCad,
-    },
+    breakdown,
   });
 }
