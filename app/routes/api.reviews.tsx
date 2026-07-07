@@ -5,6 +5,7 @@ import { getCustomerId } from "~/lib/session.server";
 import { getCustomer } from "~/lib/auth.server";
 import { reviewRewardEmail, sendEmail } from "~/lib/email.server";
 import { checkRateLimit } from "~/lib/rate-limit.server";
+import { LOYALTY, recordPoints } from "~/lib/loyalty.server";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -120,7 +121,22 @@ export async function action({ request, context }: ActionFunctionArgs) {
       // La récompense ne doit jamais bloquer la publication de l'avis
       console.error("[Reviews] Récompense échouée:", e);
     }
+
+    // Bonus de points fidélité — plus généreux avec photo (preuve sociale / UGC).
+    // Un avis est unique par produit (contrôle plus haut) → pas de double crédit.
+    try {
+      const bonus = photosJson ? LOYALTY.reviewPhotoBonus : LOYALTY.reviewTextBonus;
+      await recordPoints(db, {
+        customerId,
+        points: bonus,
+        type: "review",
+        reason: photosJson ? "Avis avec photo" : "Avis publié",
+      });
+    } catch (e) {
+      console.error("[Reviews] Bonus points échoué:", e);
+    }
   }
 
-  return json({ success: true, verified: verifiedPurchase === 1 });
+  const pointsAwarded = verifiedPurchase ? (photosJson ? LOYALTY.reviewPhotoBonus : LOYALTY.reviewTextBonus) : 0;
+  return json({ success: true, verified: verifiedPurchase === 1, pointsAwarded });
 }

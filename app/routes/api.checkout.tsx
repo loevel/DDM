@@ -4,6 +4,8 @@ import Stripe from "stripe";
 import { getActiveGiftCard } from "~/lib/gift-cards.server";
 import { applyPostPaymentEffects } from "~/lib/order-fulfillment.server";
 import { computeTaxes, getTaxSettings } from "~/lib/taxes.server";
+import { getCustomerId } from "~/lib/session.server";
+import { redeemableCad, pointsCostFor } from "~/lib/loyalty.server";
 
 // POST /api/checkout  { cartId, customerInfo, promoCode?, giftCardCode? }
 //   → { clientSecret, orderRef } | { paidInFull: true, orderRef }
@@ -17,7 +19,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   const body = await request.json();
 
-  const { cartId, customerInfo, promoCode, referralCode, giftCardCode, newsletterOptin } = body;
+  const { cartId, customerInfo, promoCode, referralCode, giftCardCode, newsletterOptin, redeemPoints } = body;
 
   if (!cartId || !customerInfo?.name || !customerInfo?.email) {
     return json({ error: "Données incomplètes." }, { status: 400 });
@@ -116,8 +118,53 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } catch { /* table pas encore dispo */ }
   }
 
+  // Attribution ambassadrice. Le code peut arriver via le champ promo (déjà
+  // validé plus haut → validPromo, remise appliquée par le code promo standard)
+  // ou via le lien /r/CODE (cookie → referralCode). On mémorise le code pour
+  // créditer la commission au paiement confirmé ; si le code vient du lien sans
+  // code promo saisi, on applique aussi la remise ambassadrice.
+  let ambassadorCode: string | null = null;
+  try {
+    const candidate = (validPromo ?? (referralCode ? String(referralCode) : "")).toUpperCase().trim();
+    if (candidate) {
+      const amb = await db
+        .prepare("SELECT code, discount_percent FROM ambassadors WHERE code = ? AND status = 'active'")
+        .bind(candidate)
+        .first<{ code: string; discount_percent: number }>();
+      if (amb) {
+        ambassadorCode = amb.code;
+        if (!validPromo && discountCad === 0 && amb.discount_percent > 0) {
+          discountCad = Math.round((subtotal * amb.discount_percent / 100) * 100) / 100;
+          validPromo = amb.code;
+        }
+      }
+    }
+  } catch { /* table ambassadors absente → ignorer */ }
+
+  // Points fidélité : la cliente connectée peut échanger ses points contre une
+  // remise (20 pts = 1 $). Validé côté serveur à partir du solde réel et lié au
+  // compte authentifié (jamais via l'email seul). Débit effectif au paiement.
+  let loyaltyCad = 0;
+  let loyaltyPointsRedeemed = 0;
+  if (redeemPoints) {
+    try {
+      const cid = await getCustomerId(request, context);
+      if (cid) {
+        const cust = await db
+          .prepare("SELECT email, loyalty_points FROM customers WHERE id = ?")
+          .bind(cid)
+          .first<{ email: string; loyalty_points: number }>();
+        if (cust && cust.email.toLowerCase() === String(customerInfo.email).trim().toLowerCase()) {
+          const cap = Math.max(0, Math.round((subtotal - discountCad) * 100) / 100);
+          loyaltyCad = redeemableCad(cust.loyalty_points ?? 0, cap);
+          loyaltyPointsRedeemed = pointsCostFor(loyaltyCad);
+        }
+      }
+    } catch { /* échange ignoré si erreur */ }
+  }
+
   // Taxes de vente — actives seulement si l'entreprise est inscrite (Admin → Paramètres)
-  const taxableCad = Math.max(0, subtotal - discountCad);
+  const taxableCad = Math.max(0, subtotal - discountCad - loyaltyCad);
   const taxSettings = await getTaxSettings(db);
   const taxes = taxSettings.enabled
     ? computeTaxes(taxableCad, customerInfo.province ?? "QC")
@@ -158,8 +205,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
     .prepare(`INSERT INTO orders
       (reference, customer_name, customer_email, customer_phone, type,
        total_cad, discount_cad, tps_cad, tvq_cad, promo_code, gift_card_code, gift_card_cad,
-       payment_status, status, shipping_address)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`)
+       payment_status, status, shipping_address, ambassador_code,
+       loyalty_points_redeemed, loyalty_discount_cad)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id`)
     .bind(
       ref,
       customerInfo.name.trim(),
@@ -182,6 +230,9 @@ export async function action({ request, context }: ActionFunctionArgs) {
         postal_code: customerInfo.postal_code,
         country: "CA",
       }),
+      ambassadorCode,
+      loyaltyPointsRedeemed,
+      loyaltyCad,
     )
     .first<{ id: number }>();
 
@@ -236,6 +287,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const breakdown = {
     subtotal: Math.round(subtotal * 100) / 100,
     discount: discountCad,
+    loyalty: loyaltyCad,
     taxes: [
       ...(taxes.tps > 0 ? [{ label: taxes.tpsLabel, amount: taxes.tps }] : []),
       ...(taxes.tvq > 0 && taxes.tvqLabel ? [{ label: taxes.tvqLabel, amount: taxes.tvq }] : []),
@@ -268,6 +320,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
     },
     receipt_email: customerInfo.email,
     description: `Commande ${ref} — DDM Wigs & More`,
+    // Adresse d'expédition : requise par les paiements différés (Affirm,
+    // Afterpay) pour être proposés, et utile à la prévention de fraude.
+    shipping: {
+      name: customerInfo.name.trim(),
+      ...(customerInfo.phone?.trim() ? { phone: customerInfo.phone.trim() } : {}),
+      address: {
+        line1: customerInfo.line1 ?? "",
+        city: customerInfo.city ?? "",
+        state: customerInfo.province ?? "",
+        postal_code: customerInfo.postal_code ?? "",
+        country: "CA",
+      },
+    },
     automatic_payment_methods: { enabled: true },
   });
 

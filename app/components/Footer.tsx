@@ -138,6 +138,7 @@ export function Footer() {
             ["/quiz", "Quiz — Trouver ma perruque"],
             ["/accessoires", "Accessoires"],
             ["/cartes-cadeaux", "Cartes Cadeaux"],
+            ["/ambassadrices", "Devenir ambassadrice"],
           ].map(([to, label]) => (
             <Link key={to} to={to} className="text-on-surface-variant hover:text-on-surface transition-colors font-sans text-base">{label}</Link>
           ))}

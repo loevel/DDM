@@ -1,8 +1,9 @@
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { json } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
-import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-stripe-js";
+import { Elements, PaymentElement, PaymentMethodMessagingElement, useElements, useStripe } from "@stripe/react-stripe-js";
 import { loadStripe } from "@stripe/stripe-js";
+import type { Stripe } from "@stripe/stripe-js";
 import { useEffect, useRef, useState } from "react";
 import { cfImage } from "~/lib/images";
 
@@ -54,6 +55,7 @@ interface CustomerInfo {
 interface Breakdown {
   subtotal: number;
   discount: number;
+  loyalty?: number;
   taxes: { label: string; amount: number }[];
   giftCard?: number;
   total: number;
@@ -76,6 +78,8 @@ export default function Checkout() {
   const [promoCode, setPromoCode] = useState("");
   const [giftCardCode, setGiftCardCode] = useState("");
   const [newsletterOptin, setNewsletterOptin] = useState(false);
+  const [loyaltyPoints, setLoyaltyPoints] = useState(0);
+  const [redeemPoints, setRedeemPoints] = useState(false);
   const [referralCode] = useState(() => {
     if (typeof document === "undefined") return null;
     const m = document.cookie.match(/(?:^|;\s*)ddm_ref=([^;]+)/);
@@ -113,6 +117,7 @@ export default function Checkout() {
           province:    me.address?.province    || prev.province,
           postal_code: me.address?.postal_code || prev.postal_code,
         }));
+        if (typeof me.loyaltyPoints === "number") setLoyaltyPoints(me.loyaltyPoints);
       }).catch(() => {});
   }, []);
 
@@ -145,6 +150,7 @@ export default function Checkout() {
           referralCode: referralCode || undefined,
           giftCardCode: giftCardCode || undefined,
           newsletterOptin: newsletterOptin || undefined,
+          redeemPoints: redeemPoints || undefined,
         }),
       });
       const data = await res.json() as { clientSecret?: string; paidInFull?: boolean; orderRef?: string; breakdown?: Breakdown; error?: string };
@@ -230,6 +236,9 @@ export default function Checkout() {
                 onGiftCardChange={setGiftCardCode}
                 newsletterOptin={newsletterOptin}
                 onNewsletterChange={setNewsletterOptin}
+                loyaltyPoints={loyaltyPoints}
+                redeemPoints={redeemPoints}
+                onRedeemChange={setRedeemPoints}
                 onSubmit={handleInfoSubmit}
                 submitting={submitting}
                 error={error}
@@ -255,6 +264,7 @@ export default function Checkout() {
                 <PaymentStep
                   orderRef={orderRef}
                   total={finalTotal}
+                  customerInfo={customerInfo}
                   onBack={() => setStep("info")}
                   onSuccess={handlePaymentSuccess}
                 />
@@ -263,7 +273,7 @@ export default function Checkout() {
           </div>
 
           {/* Récap commande */}
-          <OrderSummary cart={cart} breakdown={breakdown} deliveryDelay={deliveryDelay} />
+          <OrderSummary cart={cart} breakdown={breakdown} deliveryDelay={deliveryDelay} stripePromise={stripePromise} />
         </div>
       )}
     </main>
@@ -273,7 +283,7 @@ export default function Checkout() {
 // ─── Étape 1 : Coordonnées ────────────────────────────────────────────────────
 
 function InfoStep({
-  customerInfo, onChange, promoCode, onPromoChange, giftCardCode, onGiftCardChange, newsletterOptin, onNewsletterChange, onSubmit, submitting, error,
+  customerInfo, onChange, promoCode, onPromoChange, giftCardCode, onGiftCardChange, newsletterOptin, onNewsletterChange, loyaltyPoints, redeemPoints, onRedeemChange, onSubmit, submitting, error,
 }: {
   customerInfo: CustomerInfo;
   onChange: (v: CustomerInfo) => void;
@@ -283,10 +293,15 @@ function InfoStep({
   onGiftCardChange: (v: string) => void;
   newsletterOptin: boolean;
   onNewsletterChange: (v: boolean) => void;
+  loyaltyPoints: number;
+  redeemPoints: boolean;
+  onRedeemChange: (v: boolean) => void;
   onSubmit: (e: React.FormEvent) => void;
   submitting: boolean;
   error: string | null;
 }) {
+  // 20 points = 1 $ · minimum 100 points
+  const redeemableCad = loyaltyPoints >= 100 ? Math.floor(loyaltyPoints / 20) : 0;
   const f = (k: keyof CustomerInfo) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     onChange({ ...customerInfo, [k]: e.target.value });
 
@@ -361,6 +376,24 @@ function InfoStep({
         </div>
       </div>
 
+      {/* Points fidélité — visible seulement si la cliente connectée en a assez */}
+      {redeemableCad > 0 && (
+        <label className="flex items-start gap-3 cursor-pointer select-none border border-primary/30 bg-primary/5 p-4">
+          <input
+            type="checkbox"
+            checked={redeemPoints}
+            onChange={e => onRedeemChange(e.target.checked)}
+            className="mt-0.5 w-4 h-4 border-outline-variant text-primary focus:ring-primary"
+          />
+          <span className="font-sans text-sm text-on-surface">
+            Utiliser mes <strong>{loyaltyPoints} points</strong> — jusqu'à <strong className="text-primary">−{redeemableCad.toFixed(2)} $</strong> sur ma commande
+            <span className="block text-xs text-on-surface-variant mt-0.5">
+              La remise exacte est calculée à l'étape suivante (20 points = 1 $).
+            </span>
+          </span>
+        </label>
+      )}
+
       {/* Opt-in newsletter — non pré-coché (consentement exprès LCAP) */}
       <label className="flex items-start gap-3 cursor-pointer select-none">
         <input
@@ -410,10 +443,11 @@ function InfoStep({
 // ─── Étape 2 : Paiement ───────────────────────────────────────────────────────
 
 function PaymentStep({
-  orderRef, total, onBack, onSuccess,
+  orderRef, total, customerInfo, onBack, onSuccess,
 }: {
   orderRef: string | null;
   total: number;
+  customerInfo: CustomerInfo;
   onBack: () => void;
   onSuccess: () => void;
 }) {
@@ -462,8 +496,29 @@ function PaymentStep({
         <PaymentElement options={{
           layout: "tabs",
           wallets: { googlePay: "auto", applePay: "auto" },
+          // Préremplir la facturation depuis l'étape « Coordonnées » : évite de
+          // redemander l'adresse, notamment aux paiements différés (Klarna,
+          // Afterpay, Affirm) qui l'exigent.
+          defaultValues: {
+            billingDetails: {
+              name: customerInfo.name,
+              email: customerInfo.email,
+              phone: customerInfo.phone || undefined,
+              address: {
+                line1: customerInfo.line1,
+                city: customerInfo.city,
+                state: customerInfo.province,
+                postal_code: customerInfo.postal_code,
+                country: "CA",
+              },
+            },
+          },
         }} />
       </div>
+      <p className="font-sans text-xs text-on-surface-variant flex items-center justify-center gap-1.5 -mt-1">
+        <span className="material-symbols-outlined text-sm">payments</span>
+        Payez en une fois ou en plusieurs versements — choisissez ci-dessus.
+      </p>
 
       {error && (
         <div className="flex items-start gap-3 p-4 bg-error/5 border border-error/30">
@@ -529,7 +584,8 @@ function ConfirmationStep({ orderRef }: { orderRef: string | null }) {
 
 // ─── Récap commande ───────────────────────────────────────────────────────────
 
-function OrderSummary({ cart, breakdown, deliveryDelay }: { cart: Cart; breakdown: Breakdown | null; deliveryDelay: string }) {
+function OrderSummary({ cart, breakdown, deliveryDelay, stripePromise }: { cart: Cart; breakdown: Breakdown | null; deliveryDelay: string; stripePromise: Promise<Stripe | null> | null }) {
+  const totalCents = Math.round((breakdown?.total ?? cart.total) * 100);
   return (
     <div className="bg-surface-container-low border border-outline-variant/40 p-6 h-fit lg:sticky lg:top-24">
       <h2 className="font-sans text-sm font-bold uppercase tracking-wider text-on-surface mb-5">
@@ -571,6 +627,12 @@ function OrderSummary({ cart, breakdown, deliveryDelay }: { cart: Cart; breakdow
             <span>−{breakdown.discount.toFixed(2)} $ CAD</span>
           </div>
         )}
+        {breakdown && (breakdown.loyalty ?? 0) > 0 && (
+          <div className="flex justify-between font-sans text-sm text-secondary font-semibold">
+            <span className="flex items-center gap-1"><span className="material-symbols-outlined text-sm">stars</span>Points fidélité</span>
+            <span>−{(breakdown.loyalty ?? 0).toFixed(2)} $ CAD</span>
+          </div>
+        )}
         <div className="flex justify-between font-sans text-sm text-on-surface-variant">
           <span>Livraison</span>
           <span className="text-secondary font-semibold">Gratuite</span>
@@ -610,6 +672,29 @@ function OrderSummary({ cart, breakdown, deliveryDelay }: { cart: Cart; breakdow
           Délai de livraison : {deliveryDelay}
         </p>
       </div>
+
+      <BnplMessaging stripePromise={stripePromise} amountCents={totalCents} />
+    </div>
+  );
+}
+
+// ─── Messaging paiement en plusieurs fois (Klarna / Afterpay / Affirm) ────────
+// Affiche « Payez en 4× de X$ » dès le récapitulatif : la cliente voit l'option
+// AVANT le paiement, ce qui augmente la conversion sur les paniers élevés.
+// L'élément se masque tout seul si aucune méthode n'est disponible pour le
+// montant/pays, donc il n'affiche jamais rien d'incorrect.
+function BnplMessaging({ stripePromise, amountCents }: { stripePromise: Promise<Stripe | null> | null; amountCents: number }) {
+  if (!stripePromise || amountCents < 5000) return null;
+  return (
+    <div className="mt-4 pt-4 border-t border-outline-variant/60">
+      <Elements stripe={stripePromise}>
+        <PaymentMethodMessagingElement options={{
+          amount: amountCents,
+          currency: "CAD",
+          countryCode: "CA",
+          paymentMethodTypes: ["klarna", "afterpay_clearpay", "affirm"],
+        }} />
+      </Elements>
     </div>
   );
 }
