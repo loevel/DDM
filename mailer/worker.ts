@@ -10,7 +10,7 @@ export default {
       console.error("[mailer] CRON_SECRET manquant");
       return;
     }
-    const endpoints = ["/api/send-cart-reminders", "/api/send-review-requests"];
+    const endpoints = ["/api/send-cart-reminders", "/api/send-review-requests", "/api/send-rebuy-reminders"];
     for (const path of endpoints) {
       try {
         const res = await fetch(`${PAGES_URL}${path}`, {

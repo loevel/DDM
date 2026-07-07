@@ -150,13 +150,25 @@ export const DEFAULT_TEMPLATES: Record<string, EmailTemplate & { label: string; 
     label: "Demande d'avis (12 jours après livraison)",
     variables: ["{prenom}", "{produit}"],
     subject: "Comment trouvez-vous {produit} ? 💛",
-    body: "Bonjour {prenom} 👋\nVous profitez de votre {produit} depuis quelques semaines — nous serions ravies de connaître votre expérience !\nEn remerciement, vous recevrez un code -10% sur votre prochaine commande dès la publication de votre avis.",
+    body: "Bonjour {prenom} 👋\nVous profitez de votre {produit} depuis quelques semaines — nous serions ravies de connaître votre expérience !\nEn remerciement, vous recevrez un code -10% sur votre prochaine commande. Et si vous ajoutez une photo, vous gagnez 100 points fidélité au lieu de 25 !",
   },
   merci_avis: {
     label: "Merci pour votre avis (avec code -10 %)",
     variables: ["{prenom}", "{code}"],
     subject: "Merci pour votre avis — voici votre -10% 🎁",
     body: "Bonjour {prenom} 💛\nMerci d'avoir partagé votre avis ! Voici votre code de remerciement, valable 60 jours sur toute la boutique.",
+  },
+  rachat_relance: {
+    label: "Relance de rachat (90 jours après livraison, avec code -15 %)",
+    variables: ["{prenom}", "{produit}", "{code}"],
+    subject: "Il est temps de chouchouter vos cheveux 💆‍♀️",
+    body: "Bonjour {prenom} 💛\nCela fait quelques mois que vous portez votre {produit} — nous espérons qu'elle vous fait toujours rayonner.\nPour la garder aussi sublime qu'au premier jour, ou pour vous offrir une nouvelle pièce, voici un code privilège -15% rien que pour vous.",
+  },
+  quiz_reco: {
+    label: "Quiz — sélection personnalisée + code -10 % (48 h)",
+    variables: ["{prenom}", "{code}"],
+    subject: "Ta sélection DDM Wigs + un code -10% rien que pour toi 💛",
+    body: "Coucou {prenom} 💛\nMerci d'avoir complété notre quiz ! Voici les perruques qui te correspondent le mieux, choisies d'après tes réponses.\nEt pour te souhaiter la bienvenue, on t'offre -10% sur ta première commande — mais dépêche-toi, le code expire dans 48h.",
   },
 };
 
@@ -383,6 +395,80 @@ export async function reviewRewardEmail(
   };
 }
 
+export async function rebuyReminderEmail(
+  db: D1Database,
+  opts: { prenom: string; productName: string; code: string; unsubUrl?: string }
+): Promise<{ subject: string; html: string }> {
+  const tpl = await getTemplate(db, "rachat_relance");
+  const vars = { prenom: opts.prenom || "", produit: opts.productName, code: opts.code };
+  return {
+    subject: fillTemplate(tpl.subject, vars),
+    html: emailLayout({
+      eyebrow: "Rien que pour vous",
+      title: "Prête pour un nouveau moment ?",
+      content:
+        bodyToHtml(fillTemplate(tpl.body, vars)) +
+        `<div style="background:#fdf6f0;border:2px dashed #c9a87c;border-radius:4px;padding:16px 20px;margin:20px 0;text-align:center;">
+          <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:11px;color:#9b8b7a;text-transform:uppercase;letter-spacing:2px;">Votre code privilège</p>
+          <p style="margin:0 0 4px;font-family:Georgia,serif;font-size:26px;font-weight:bold;color:#c9a87c;letter-spacing:4px;">${escapeHtml(opts.code)}</p>
+          <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#9b8b7a;">-15% sur toute la boutique · Valable 30 jours</p>
+        </div>`,
+      cta: { label: "Renouveler ma sélection →", url: `${SITE_URL}/boutique` },
+      note: `Un doute sur l'entretien ? Consultez notre <a href="${SITE_URL}/guide-entretien" style="color:#c9a87c;text-decoration:none;">guide d'entretien</a>.`,
+      footerReason: "Vous recevez cet email suite à un achat sur ddmwigs.com.",
+      unsubUrl: opts.unsubUrl,
+    }),
+  };
+}
+
+export type QuizRecoProduct = { name: string; slug: string; price_cad: number; imageUrl: string | null };
+
+export async function quizRecommendationEmail(
+  db: D1Database,
+  opts: { prenom?: string; summary: string; products: QuizRecoProduct[]; code: string; unsubUrl?: string }
+): Promise<{ subject: string; html: string }> {
+  const tpl = await getTemplate(db, "quiz_reco");
+  const vars = { prenom: opts.prenom || "", code: opts.code };
+
+  const cards = opts.products.slice(0, 4).map(pr => {
+    const url = `${SITE_URL}/boutique/${escapeHtml(pr.slug)}`;
+    const thumb = pr.imageUrl
+      ? `<img src="${escapeHtml(pr.imageUrl)}" width="80" height="100" alt="${escapeHtml(pr.name)}" style="display:block;width:80px;height:100px;object-fit:cover;border:1px solid #eaded3;">`
+      : `<div style="width:80px;height:100px;background:#f0ebe6;"></div>`;
+    return `
+    <table width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 12px;"><tr>
+      <td width="80" style="padding:0 14px 0 0;vertical-align:top;"><a href="${url}" style="text-decoration:none;">${thumb}</a></td>
+      <td style="vertical-align:top;padding-top:4px;">
+        <a href="${url}" style="text-decoration:none;">
+          <p style="margin:0 0 4px;font-family:Georgia,serif;font-size:15px;color:#1a1a1a;">${escapeHtml(pr.name)}</p>
+          <p style="margin:0;font-family:Arial,sans-serif;font-size:14px;font-weight:bold;color:#c9a87c;">${pr.price_cad.toFixed(2)}&nbsp;$ CAD</p>
+        </a>
+      </td>
+    </tr></table>`;
+  }).join("");
+
+  return {
+    subject: fillTemplate(tpl.subject, vars),
+    html: emailLayout({
+      eyebrow: "Ta sélection personnalisée",
+      title: "Tes perruques idéales",
+      content:
+        bodyToHtml(fillTemplate(tpl.body, vars)) +
+        (opts.summary ? p(`<em style="color:#9b8b7a;">Ton profil : ${escapeHtml(opts.summary)}</em>`) : "") +
+        `<div style="border-top:2px solid #1a1a1a;padding-top:16px;margin-top:8px;">${cards}</div>` +
+        `<div style="background:#fdf6f0;border:2px dashed #c9a87c;border-radius:4px;padding:16px 20px;margin:20px 0;text-align:center;">
+          <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:11px;color:#9b8b7a;text-transform:uppercase;letter-spacing:2px;">Ton code de bienvenue</p>
+          <p style="margin:0 0 4px;font-family:Georgia,serif;font-size:26px;font-weight:bold;color:#c9a87c;letter-spacing:4px;">${escapeHtml(opts.code)}</p>
+          <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#9b8b7a;">-10% sur ta première commande · Valable 48h</p>
+        </div>`,
+      cta: { label: "Magasiner ma sélection →", url: `${SITE_URL}/boutique` },
+      note: "Ce code expire dans 48h — c'est le moment de te faire plaisir.",
+      footerReason: "Tu reçois cet email car tu as complété le quiz sur ddmwigs.com.",
+      unsubUrl: opts.unsubUrl,
+    }),
+  };
+}
+
 export function newsletterEmail(opts: {
   subject: string;
   body: string;
@@ -500,6 +586,63 @@ export function contactReplyEmail(opts: {
         `<p style="margin:0 0 14px;font-family:Arial,sans-serif;font-size:14px;color:#6b5e52;line-height:1.7;white-space:pre-wrap;">${escapeHtml(opts.replyText)}</p>` +
         `<p style="margin:24px 0 0;font-family:Arial,sans-serif;font-size:12px;color:#9b8b7a;line-height:1.6;border-left:3px solid #e8ddd4;padding-left:12px;">Votre message :<br>${escapeHtml(opts.originalMessage)}</p>`,
       footerReason: "Vous recevez cet email en réponse à votre message sur ddmwigs.com.",
+    }),
+  };
+}
+
+// ── Programme d'ambassadrices ─────────────────────────────────────────────────
+
+export function ambassadorApplicationAdminEmail(opts: {
+  name: string;
+  email: string;
+  social?: string;
+  audience?: string;
+  message?: string;
+}): { subject: string; html: string } {
+  return {
+    subject: `Nouvelle candidature ambassadrice — ${opts.name}`,
+    html: emailLayout({
+      eyebrow: "Programme ambassadrices",
+      title: escapeHtml(opts.name),
+      content:
+        p(`<strong>${escapeHtml(opts.name)}</strong> — ${escapeHtml(opts.email)}`) +
+        (opts.social ? p(`<span style="color:#c9a87c;">Réseaux :</span> ${escapeHtml(opts.social)}`) : "") +
+        (opts.audience ? p(`<span style="color:#c9a87c;">Audience :</span> ${escapeHtml(opts.audience)}`) : "") +
+        (opts.message
+          ? `<p style="margin:0 0 14px;font-family:Arial,sans-serif;font-size:14px;color:#6b5e52;line-height:1.7;white-space:pre-wrap;border-left:3px solid #c9a87c;padding-left:16px;">${escapeHtml(opts.message)}</p>`
+          : ""),
+      cta: { label: "Examiner la candidature →", url: `${SITE_URL}/admin/ambassadrices` },
+      footerReason: "Notification interne — candidature reçue via le programme ambassadrices.",
+    }),
+  };
+}
+
+export function ambassadorApprovedEmail(opts: {
+  name: string;
+  code: string;
+  discountPercent: number;
+  commissionRate: number;
+}): { subject: string; html: string } {
+  const firstName = (opts.name || "").split(" ")[0];
+  const link = `${SITE_URL}/r/${encodeURIComponent(opts.code)}`;
+  return {
+    subject: "Bienvenue dans le cercle des ambassadrices DDM Wigs 💛",
+    html: emailLayout({
+      eyebrow: "Félicitations",
+      title: "Tu fais partie de la famille !",
+      content:
+        p(`Coucou ${escapeHtml(firstName)} 💛`) +
+        p("Ta candidature est acceptée — bienvenue parmi les ambassadrices DDM Wigs &amp; More ! Voici ton code personnel :") +
+        `<div style="background:#fdf6f0;border:2px dashed #c9a87c;border-radius:4px;padding:20px;margin:20px 0;text-align:center;">
+          <p style="margin:0 0 6px;font-family:Arial,sans-serif;font-size:11px;color:#9b8b7a;text-transform:uppercase;letter-spacing:2px;">Ton code personnel</p>
+          <p style="margin:0 0 8px;font-family:Georgia,serif;font-size:28px;font-weight:bold;color:#c9a87c;letter-spacing:4px;">${escapeHtml(opts.code)}</p>
+          <p style="margin:0;font-family:Arial,sans-serif;font-size:12px;color:#9b8b7a;">-${opts.discountPercent}% pour ta communauté · ${opts.commissionRate}% de commission pour toi</p>
+        </div>` +
+        p("Partage ton code ou ton lien personnel : chaque commande passée avec te fait gagner une commission.") +
+        p(`<span style="color:#c9a87c;">Ton lien :</span> <a href="${link}" style="color:#c9a87c;word-break:break-all;">${link}</a>`),
+      cta: { label: "Découvrir la boutique →", url: `${SITE_URL}/boutique` },
+      note: "Une question sur le programme ? Réponds simplement à ce courriel.",
+      footerReason: "Vous recevez cet email car vous avez rejoint le programme ambassadrices de ddmwigs.com.",
     }),
   };
 }

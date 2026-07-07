@@ -18,7 +18,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     db.prepare("SELECT COUNT(*) as total, SUM(total_cad) as spent FROM orders WHERE customer_email = ? AND status != 'cancelled'")
       .bind(customer!.email)
       .first<{ total: number; spent: number | null }>(),
-    db.prepare("SELECT texture_preferee, budget_habituel, cap_size, quiz_result FROM customers WHERE id = ?")
+    db.prepare("SELECT texture_preferee, budget_habituel, cap_size, quiz_result, loyalty_points FROM customers WHERE id = ?")
       .bind(customerId).first<any>(),
     db.prepare("SELECT COUNT(*) as cnt FROM wishlists WHERE customer_id = ?")
       .bind(customerId).first<{ cnt: number }>(),
@@ -26,8 +26,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   const profileComplete = !!(prefs?.texture_preferee && prefs?.budget_habituel && prefs?.cap_size);
   const hasQuiz = !!prefs?.quiz_result;
+  const loyaltyPoints = Number(prefs?.loyalty_points ?? 0);
 
-  return json({ customer, recentOrders: recentOrders.results, stats, profileComplete, hasQuiz, wishlistCount: wishlistCount?.cnt ?? 0 });
+  return json({ customer, recentOrders: recentOrders.results, stats, profileComplete, hasQuiz, wishlistCount: wishlistCount?.cnt ?? 0, loyaltyPoints });
 }
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -39,7 +40,8 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 };
 
 export default function TableauDeBord() {
-  const { customer, recentOrders, stats, profileComplete, hasQuiz, wishlistCount } = useLoaderData<typeof loader>();
+  const { customer, recentOrders, stats, profileComplete, hasQuiz, wishlistCount, loyaltyPoints } = useLoaderData<typeof loader>();
+  const loyaltyValue = Math.floor(loyaltyPoints / 20); // 20 pts = 1 $
 
   return (
     <div className="space-y-8">
@@ -75,6 +77,23 @@ export default function TableauDeBord() {
           )}
         </div>
       )}
+
+      {/* Fidélité */}
+      <div className="bg-on-surface text-white px-6 py-5 flex items-center gap-5 rounded-sm">
+        <span className="material-symbols-outlined text-primary-fixed text-3xl" style={{ fontVariationSettings: "'FILL' 1" }}>stars</span>
+        <div className="flex-1">
+          <p className="font-headline-sm text-headline-sm text-white">{loyaltyPoints} points fidélité</p>
+          <p className="text-white/60 text-sm">
+            {loyaltyPoints >= 100
+              ? `Soit jusqu'à ${loyaltyValue} $ de remise à ton prochain achat.`
+              : `Encore ${100 - loyaltyPoints} points avant ta première remise. Chaque dollar dépensé = 1 point.`}
+          </p>
+        </div>
+        <Link to="/boutique" className="hidden sm:inline-flex items-center gap-1.5 bg-white/10 hover:bg-white/20 transition-colors px-4 py-2 text-sm font-semibold">
+          Magasiner
+          <span className="material-symbols-outlined text-base">arrow_forward</span>
+        </Link>
+      </div>
 
       {/* Stats */}
       <div className="grid grid-cols-3 gap-4">

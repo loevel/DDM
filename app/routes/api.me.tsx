@@ -9,9 +9,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   const db = context.cloudflare.env.DB;
 
   const customer = await db
-    .prepare("SELECT id, email, name, phone FROM customers WHERE id = ?")
+    .prepare("SELECT id, email, name, phone, loyalty_points FROM customers WHERE id = ?")
     .bind(customerId)
-    .first<{ id: string; email: string; name: string | null; phone: string | null }>();
+    .first<{ id: string; email: string; name: string | null; phone: string | null; loyalty_points: number | null }>();
 
   if (!customer) return json(null, { status: 401 });
 
@@ -31,5 +31,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     email: customer.email,
     phone: customer.phone ?? "",
     address: address ?? null,
+    loyaltyPoints: customer.loyalty_points ?? 0,
   });
 }

@@ -1,86 +1,201 @@
 import { json } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
-import { Link, useFetcher } from "@remix-run/react";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
+import { Link, useFetcher, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { getDB } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
 import { getCustomerId } from "~/lib/session.server";
 import { cfImage } from "~/lib/images";
+import { checkRateLimit } from "~/lib/rate-limit.server";
+import { quizRecommendationEmail, sendEmail } from "~/lib/email.server";
+
+const SITE_URL = "https://ddmwigs.com";
 
 export const meta: MetaFunction = () => [
   { title: "Trouve ta perruque idéale — DDM Wigs & More" },
   { name: "description", content: "Réponds à 5 questions et découvre les perruques parfaites pour toi." },
 ];
 
-// ─── Action (filtre les produits selon les réponses) ────────────────────────
+// ─── Loader (état de connexion → affiche ou non la capture email) ───────────
 
-export async function action({ request, context }: ActionFunctionArgs) {
-  const form = await request.formData();
-  const experience = form.get("experience") as string;
-  const texture    = form.get("texture") as string;
-  const budget     = form.get("budget") as string;
-  const facilite   = form.get("facilite") as string;
-
-  const db = getDB(context);
-
-  // Sauvegarder le résultat si la cliente est connectée
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  let loggedIn = false;
   try {
-    const customerId = await getCustomerId(request, context as any);
-    if (customerId) {
-      const answers = { experience, texture, budget, facilite,
-        occasion: form.get("occasion") as string };
-      await context.cloudflare.env.DB
-        .prepare("UPDATE customers SET quiz_result = ?, quiz_completed_at = datetime('now'), texture_preferee = ?, budget_habituel = ? WHERE id = ?")
-        .bind(JSON.stringify(answers), texture || null, budget || null, customerId)
-        .run();
-    }
-  } catch { /* silencieux si non connectée */ }
+    loggedIn = !!(await getCustomerId(request, context as any));
+  } catch { /* visiteuse anonyme */ }
+  return json({ loggedIn });
+}
 
-  let where: string[] = ["p.stock > 0"];
-  const binds: any[] = [];
+// ─── Recommandation produits (partagée : affichage page + email) ────────────
 
-  // Texture
-  if (texture === "lisse") {
+type QuizAnswers = {
+  experience?: string;
+  occasion?: string;
+  texture?: string;
+  budget?: string;
+  facilite?: string;
+};
+
+async function recommendProducts(db: D1Database, a: QuizAnswers): Promise<Product[]> {
+  const where: string[] = ["p.stock > 0"];
+
+  if (a.texture === "lisse") {
     where.push("p.texture IN ('lisse')");
-  } else if (texture === "ondule") {
+  } else if (a.texture === "ondule") {
     where.push("p.texture IN ('body-wave','water-wave','loose-wave')");
-  } else if (texture === "boucle") {
+  } else if (a.texture === "boucle") {
     where.push("p.texture IN ('boucle','kinky-curly','deep-wave')");
   }
 
-  // Budget
-  if (budget === "budget1") {
+  if (a.budget === "budget1") {
     where.push("p.price_cad <= 400");
-  } else if (budget === "budget2") {
+  } else if (a.budget === "budget2") {
     where.push("p.price_cad > 400 AND p.price_cad <= 600");
-  } else if (budget === "budget3") {
+  } else if (a.budget === "budget3") {
     where.push("p.price_cad > 600");
   }
 
-  // Facilité de pose
-  if (facilite === "simple" || experience === "premiere") {
+  if (a.facilite === "simple" || a.experience === "premiere") {
     where.push("(p.glueless = 1 OR p.pret_a_porter = 1)");
   }
 
-  const sql = `SELECT * FROM products p WHERE ${where.join(" AND ")} ORDER BY p.featured DESC, p.price_cad ASC LIMIT 6`;
-
   try {
-    const { results } = await db.prepare(sql).bind(...binds).all<Product>();
+    const { results } = await db
+      .prepare(`SELECT * FROM products p WHERE ${where.join(" AND ")} ORDER BY p.featured DESC, p.price_cad ASC LIMIT 6`)
+      .all<Product>();
     let products = results ?? [];
 
     // Si trop peu de résultats, on élargit sans le filtre texture
     if (products.length < 2) {
       const whereFallback = where.filter(w => !w.includes("texture"));
-      const { results: fallback } = await db.prepare(
-        `SELECT * FROM products p WHERE ${whereFallback.join(" AND ")} ORDER BY p.featured DESC, p.price_cad ASC LIMIT 6`
-      ).all<Product>();
+      const { results: fallback } = await db
+        .prepare(`SELECT * FROM products p WHERE ${whereFallback.join(" AND ")} ORDER BY p.featured DESC, p.price_cad ASC LIMIT 6`)
+        .all<Product>();
       products = fallback ?? [];
     }
-
-    return json({ products, ok: true });
+    return products;
   } catch {
-    return json({ products: [], ok: true });
+    return [];
   }
+}
+
+function readAnswers(form: FormData): QuizAnswers {
+  return {
+    experience: (form.get("experience") as string) || undefined,
+    occasion: (form.get("occasion") as string) || undefined,
+    texture: (form.get("texture") as string) || undefined,
+    budget: (form.get("budget") as string) || undefined,
+    facilite: (form.get("facilite") as string) || undefined,
+  };
+}
+
+// ─── Action ─────────────────────────────────────────────────────────────────
+// intent absent  → calcule et renvoie les produits (affichage résultats)
+// intent=capture → inscrit l'email, génère un code -10 % (48h) et l'envoie
+
+export async function action({ request, context }: ActionFunctionArgs) {
+  const form = await request.formData();
+  const db = getDB(context);
+  const answers = readAnswers(form);
+
+  if (form.get("intent") === "capture") {
+    return handleCapture(request, context, form, db, answers);
+  }
+
+  // Sauvegarder le résultat si la cliente est connectée
+  try {
+    const customerId = await getCustomerId(request, context as any);
+    if (customerId) {
+      await db
+        .prepare("UPDATE customers SET quiz_result = ?, quiz_completed_at = datetime('now'), texture_preferee = ?, budget_habituel = ? WHERE id = ?")
+        .bind(JSON.stringify(answers), answers.texture || null, answers.budget || null, customerId)
+        .run();
+    }
+  } catch { /* silencieux si non connectée */ }
+
+  const products = await recommendProducts(db, answers);
+  return json({ products, ok: true });
+}
+
+async function handleCapture(
+  request: Request,
+  context: ActionFunctionArgs["context"],
+  form: FormData,
+  db: D1Database,
+  answers: QuizAnswers,
+) {
+  const allowed = await checkRateLimit(context, request, { name: "quiz-capture", max: 5, windowSeconds: 3600 });
+  if (!allowed) return json({ error: "Trop de tentatives. Réessaie plus tard." }, { status: 429 });
+
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  if (!email.includes("@") || email.length < 5) {
+    return json({ error: "Adresse courriel invalide." }, { status: 400 });
+  }
+  const prenom = String(form.get("prenom") ?? "").trim().slice(0, 60);
+
+  // 1. Inscription newsletter — le quiz est un opt-in explicite (preuve LCAP :
+  //    date + IP). On récupère/crée le token de désabonnement.
+  const ip = request.headers.get("CF-Connecting-IP") ?? null;
+  let unsubToken = crypto.randomUUID().replace(/-/g, "");
+  try {
+    await db.prepare("INSERT INTO newsletter (email, consent_ip, unsub_token) VALUES (?, ?, ?)")
+      .bind(email, ip, unsubToken).run();
+  } catch (e: any) {
+    if (e?.message?.includes("UNIQUE")) {
+      // Déjà inscrite : réactiver si désabonnée, réutiliser son token
+      try {
+        await db.prepare("UPDATE newsletter SET unsubscribed_at = NULL, consent_ip = ?, subscribed_at = datetime('now') WHERE email = ? AND unsubscribed_at IS NOT NULL")
+          .bind(ip, email).run();
+      } catch { /* colonnes pas encore migrées */ }
+      try {
+        const row = await db.prepare("SELECT unsub_token FROM newsletter WHERE email = ?").bind(email).first<{ unsub_token: string | null }>();
+        if (row?.unsub_token) unsubToken = row.unsub_token;
+      } catch { /* ignore */ }
+    } else {
+      console.error("[Quiz] Inscription newsletter échouée:", e);
+    }
+  }
+  // Tag de la source (best-effort : ignoré si la colonne n'existe pas encore)
+  try {
+    await db.prepare("UPDATE newsletter SET source = 'quiz' WHERE email = ? AND (source IS NULL OR source = '')")
+      .bind(email).run();
+  } catch { /* colonne source absente */ }
+
+  // 2. Code -10 % unique, usage unique, valable 48h
+  const code = "QUIZ" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const exp = new Date(Date.now() + 48 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
+  try {
+    await db.prepare("INSERT INTO promo_codes (code, type, value, min_order, usage_limit, active, expires_at) VALUES (?, 'percent', 10, 0, 1, 1, ?)")
+      .bind(code, exp).run();
+  } catch (e) {
+    console.error("[Quiz] Création du code échouée:", e);
+    return json({ error: "Impossible de générer ton code. Réessaie." }, { status: 500 });
+  }
+
+  // 3. Envoi de la sélection personnalisée + code
+  const products = await recommendProducts(db, answers);
+  const apiKey = context.cloudflare.env.RESEND_API_KEY as string | undefined;
+  if (apiKey) {
+    try {
+      const { subject, html } = await quizRecommendationEmail(db, {
+        prenom,
+        summary: generateTitle(answers),
+        products: products.slice(0, 4).map(pr => ({
+          name: pr.name,
+          slug: pr.slug,
+          price_cad: Number(pr.price_cad),
+          imageUrl: cfImage(pr.image_key, "card"),
+        })),
+        code,
+        unsubUrl: `${SITE_URL}/desabonnement?token=${unsubToken}`,
+      });
+      await sendEmail({ apiKey, to: email, subject, html });
+    } catch (e) {
+      console.error("[Quiz] Envoi de l'email de reco échoué:", e);
+    }
+  }
+
+  return json({ ok: true, captured: true, code });
 }
 
 // ─── Quiz steps ─────────────────────────────────────────────────────────────
@@ -141,7 +256,7 @@ const STEPS = [
 
 type Answers = Record<string, string>;
 
-function generateTitle(answers: Answers): string {
+function generateTitle(answers: QuizAnswers): string {
   const parts: string[] = [];
   if (answers.texture === "lisse") parts.push("lisse & élégante");
   else if (answers.texture === "ondule") parts.push("ondulée & naturelle");
@@ -155,10 +270,12 @@ function generateTitle(answers: Answers): string {
 // ─── Page ───────────────────────────────────────────────────────────────────
 
 export default function Quiz() {
+  const { loggedIn } = useLoaderData<typeof loader>();
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Answers>({});
   const [done, setDone] = useState(false);
   const fetcher = useFetcher<{ products: Product[] }>();
+  const capture = useFetcher<{ ok?: boolean; captured?: boolean; code?: string; error?: string }>();
 
   function choose(value: string) {
     const current = STEPS[step];
@@ -251,6 +368,67 @@ export default function Quiz() {
                   </Link>
                 ))}
               </div>
+
+              {!loggedIn && (
+                capture.data?.captured ? (
+                  <div className="max-w-md mx-auto text-center border-2 border-primary bg-primary/5 p-8 mb-12">
+                    <span className="material-symbols-outlined text-4xl text-primary mb-3 block" style={{ fontVariationSettings: "'FILL' 1" }}>mark_email_read</span>
+                    <p className="font-serif text-xl text-on-surface mb-2">C'est envoyé ! 💛</p>
+                    <p className="font-sans text-sm text-on-surface-variant mb-5">
+                      Ta sélection t'attend dans ta boîte mail. Et voici ton code de bienvenue :
+                    </p>
+                    <div className="inline-block border-2 border-dashed border-primary bg-surface px-6 py-3 mb-2">
+                      <p className="font-serif text-2xl font-bold text-primary tracking-[0.2em]">{capture.data.code}</p>
+                    </div>
+                    <p className="font-sans text-xs text-on-surface-variant">-10% sur ta première commande · valable 48h</p>
+                  </div>
+                ) : (
+                  <div className="max-w-md mx-auto border-2 border-primary/40 bg-surface p-6 sm:p-8 mb-12">
+                    <div className="text-center mb-5">
+                      <span className="inline-flex items-center gap-1.5 bg-primary/10 text-primary text-[11px] font-bold px-3 py-1 uppercase tracking-widest mb-3">
+                        <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>redeem</span>
+                        Offre de bienvenue
+                      </span>
+                      <h2 className="font-serif text-xl text-on-surface mb-1">Reçois ta sélection + <span className="text-primary">-10%</span></h2>
+                      <p className="font-sans text-sm text-on-surface-variant">
+                        Ton code exclusif valable 48h, directement par courriel.
+                      </p>
+                    </div>
+                    <capture.Form method="post" className="space-y-3">
+                      <input type="hidden" name="intent" value="capture" />
+                      {Object.entries(answers).map(([k, v]) => (
+                        <input key={k} type="hidden" name={k} value={v} />
+                      ))}
+                      <input
+                        name="prenom"
+                        type="text"
+                        placeholder="Ton prénom (optionnel)"
+                        className="w-full border border-outline-variant bg-background px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-none"
+                      />
+                      <input
+                        name="email"
+                        type="email"
+                        required
+                        placeholder="Ton adresse courriel"
+                        className="w-full border border-outline-variant bg-background px-4 py-3 text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-none"
+                      />
+                      {capture.data?.error && (
+                        <p className="text-xs text-red-600 text-center">{capture.data.error}</p>
+                      )}
+                      <button
+                        type="submit"
+                        disabled={capture.state !== "idle"}
+                        className="w-full bg-primary text-on-primary text-sm font-semibold py-3 uppercase tracking-wider hover:opacity-90 transition-opacity disabled:opacity-60"
+                      >
+                        {capture.state !== "idle" ? "Envoi…" : "Recevoir mon code -10%"}
+                      </button>
+                      <p className="font-sans text-[11px] text-on-surface-variant/70 text-center leading-relaxed">
+                        En t'inscrivant, tu acceptes de recevoir nos courriels. Désabonnement en un clic à tout moment.
+                      </p>
+                    </capture.Form>
+                  </div>
+                )
+              )}
 
               <div className="flex flex-col sm:flex-row gap-3 justify-center">
                 <button onClick={reset}
