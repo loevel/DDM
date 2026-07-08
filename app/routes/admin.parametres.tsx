@@ -13,6 +13,7 @@ const FIELDS = [
   "contact_email",
   "site_slogan",
   "footer_note",
+  "ambassadors_enabled",
   "taxes_enabled",
   "tps_number",
   "tvq_number",
@@ -46,7 +47,8 @@ export async function action({ request, context }: ActionFunctionArgs) {
   for (const key of FIELDS) {
     // Checkbox non cochée = absente du formulaire → "0"
     const raw = form.get(key);
-    const value = key === "taxes_enabled"
+    const isCheckbox = key === "taxes_enabled" || key === "ambassadors_enabled";
+    const value = isCheckbox
       ? (raw === "1" ? "1" : "0")
       : ((raw as string) ?? "").trim();
     await db
@@ -198,6 +200,31 @@ export default function AdminParametres() {
               placeholder="Texte affiché en bas de page"
               textarea
             />
+          </div>
+        </Section>
+
+        <Section title="Programmes marketing" icon="campaign">
+          <div className="sm:col-span-2">
+            <label className="flex items-start gap-3 cursor-pointer">
+              <input
+                type="checkbox"
+                name="ambassadors_enabled"
+                value="1"
+                defaultChecked={settings.ambassadors_enabled === "1"}
+                className="mt-0.5 w-4 h-4 accent-primary"
+              />
+              <span>
+                <span className="font-sans text-sm font-semibold text-on-surface block">
+                  Programme ambassadrices
+                </span>
+                <span className="font-sans text-xs text-on-surface-variant">
+                  Affiche la page publique « Devenir ambassadrice » et le lien dans le
+                  footer. Une fois désactivé, la page devient inaccessible et le lien
+                  disparaît — les ambassadrices déjà approuvées gardent leur code et
+                  leurs commissions (gérables dans Marketing → Ambassadrices).
+                </span>
+              </span>
+            </label>
           </div>
         </Section>
 
