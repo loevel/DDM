@@ -1,5 +1,6 @@
-import { Link } from "@remix-run/react";
+import { Link, useRouteLoaderData } from "@remix-run/react";
 import { useState } from "react";
+import type { loader as rootLoader } from "~/root";
 
 function FooterNewsletter() {
   const [email, setEmail] = useState("");
@@ -120,6 +121,15 @@ function GooglePayLogo() {
 }
 
 export function Footer() {
+  const rootData = useRouteLoaderData<typeof rootLoader>("root");
+  const explorerLinks: [string, string][] = [
+    ["/boutique", "Boutique Perruques"],
+    ["/quiz", "Quiz — Trouver ma perruque"],
+    ["/accessoires", "Accessoires"],
+    ["/cartes-cadeaux", "Cartes Cadeaux"],
+    ...(rootData?.ambassadorsEnabled ? ([["/ambassadrices", "Devenir ambassadrice"]] as [string, string][]) : []),
+  ];
+
   return (
     <footer className="w-full mt-28 bg-[#f6f3f2] border-t border-[#d4c4b7]">
       <FooterNewsletter />
@@ -133,13 +143,7 @@ export function Footer() {
 
         <div className="flex flex-col space-y-3">
           <h4 className="font-sans text-sm font-semibold text-on-surface uppercase tracking-widest mb-2">Explorer</h4>
-          {[
-            ["/boutique", "Boutique Perruques"],
-            ["/quiz", "Quiz — Trouver ma perruque"],
-            ["/accessoires", "Accessoires"],
-            ["/cartes-cadeaux", "Cartes Cadeaux"],
-            ["/ambassadrices", "Devenir ambassadrice"],
-          ].map(([to, label]) => (
+          {explorerLinks.map(([to, label]) => (
             <Link key={to} to={to} className="text-on-surface-variant hover:text-on-surface transition-colors font-sans text-base">{label}</Link>
           ))}
         </div>

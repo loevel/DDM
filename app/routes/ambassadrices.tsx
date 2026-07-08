@@ -1,8 +1,9 @@
 import { json } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
+import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { useFetcher } from "@remix-run/react";
 import { getDB } from "~/lib/db.server";
 import { checkRateLimit } from "~/lib/rate-limit.server";
+import { isAmbassadorProgramEnabled } from "~/lib/settings.server";
 import { ambassadorApplicationAdminEmail, sendEmail } from "~/lib/email.server";
 
 export const meta: MetaFunction = () => [
@@ -10,7 +11,18 @@ export const meta: MetaFunction = () => [
   { name: "description", content: "Rejoins le cercle des ambassadrices DDM Wigs : ton code perso, une remise pour ta communauté et une commission sur chaque vente." },
 ];
 
+export async function loader({ context }: LoaderFunctionArgs) {
+  // Fonctionnalité désactivable dans /admin/parametres : page masquée si off.
+  if (!(await isAmbassadorProgramEnabled(getDB(context)))) {
+    throw new Response("Not Found", { status: 404 });
+  }
+  return json({});
+}
+
 export async function action({ request, context }: ActionFunctionArgs) {
+  if (!(await isAmbassadorProgramEnabled(getDB(context)))) {
+    throw new Response("Not Found", { status: 404 });
+  }
   const allowed = await checkRateLimit(context, request, { name: "ambassador-apply", max: 3, windowSeconds: 3600 });
   if (!allowed) return json({ error: "Trop de tentatives. Réessaie plus tard." }, { status: 429 });
 

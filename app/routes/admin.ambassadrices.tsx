@@ -2,8 +2,10 @@ import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { useFetcher, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
+import { Link } from "@remix-run/react";
 import { requireAdmin, logAdminAction } from "~/lib/admin-session.server";
 import { ambassadorApprovedEmail, sendEmail } from "~/lib/email.server";
+import { isAmbassadorProgramEnabled } from "~/lib/settings.server";
 
 export const meta: MetaFunction = () => [{ title: "Ambassadrices — Admin DDM" }];
 
@@ -27,7 +29,7 @@ interface Ambassador {
 export async function loader({ context }: LoaderFunctionArgs) {
   const db = context.cloudflare.env.DB;
 
-  const [ambassadors, sales, stats] = await Promise.all([
+  const [ambassadors, sales, stats, enabled] = await Promise.all([
     db.prepare(`
       SELECT * FROM ambassadors
       ORDER BY CASE status WHEN 'pending' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, created_at DESC
@@ -45,12 +47,14 @@ export async function loader({ context }: LoaderFunctionArgs) {
         COALESCE(SUM(total_commission_cad - paid_commission_cad), 0) as owed
       FROM ambassadors
     `).first<{ active: number; pending: number; sales: number; owed: number }>(),
+    isAmbassadorProgramEnabled(db),
   ]);
 
   return json({
     ambassadors: ambassadors.results ?? [],
     sales: sales.results ?? [],
     stats: stats ?? { active: 0, pending: 0, sales: 0, owed: 0 },
+    enabled,
   });
 }
 
@@ -134,13 +138,25 @@ const STATUS = {
 } as const;
 
 export default function AdminAmbassadrices() {
-  const { ambassadors, sales, stats } = useLoaderData<typeof loader>();
+  const { ambassadors, sales, stats, enabled } = useLoaderData<typeof loader>();
   const pending = (ambassadors as Ambassador[]).filter(a => a.status === "pending");
   const others = (ambassadors as Ambassador[]).filter(a => a.status !== "pending");
 
   return (
     <div className="p-8">
       <h1 className="text-2xl font-bold text-on-surface mb-8">Programme ambassadrices</h1>
+
+      {!enabled && (
+        <div className="mb-8 flex items-start gap-3 px-4 py-3 bg-tertiary-container/30 border border-tertiary/40 text-on-surface">
+          <span className="material-symbols-outlined text-base text-tertiary mt-0.5">visibility_off</span>
+          <p className="font-sans text-sm">
+            La page publique du programme est <strong>désactivée</strong> : le lien
+            « Devenir ambassadrice » n'apparaît pas sur la boutique et le formulaire de
+            candidature est fermé. Tu peux toujours gérer les ambassadrices existantes ici.{" "}
+            <Link to="/admin/parametres" className="text-primary underline">Activer dans les paramètres</Link>.
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         {[

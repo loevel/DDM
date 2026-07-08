@@ -17,11 +17,15 @@ import tailwindHref from "~/tailwind.css?url";
 export async function loader({ context }: LoaderFunctionArgs) {
   // Identifiants configurables dans /admin/parametres — aucun script injecté si absents
   const { results } = await context.cloudflare.env.DB
-    .prepare("SELECT key, value FROM site_settings WHERE key IN ('ga4_id', 'meta_pixel_id')")
+    .prepare("SELECT key, value FROM site_settings WHERE key IN ('ga4_id', 'meta_pixel_id', 'ambassadors_enabled')")
     .all<{ key: string; value: string }>();
   const settings: Record<string, string> = {};
   for (const row of results ?? []) settings[row.key] = row.value;
-  return { ga4Id: settings.ga4_id || null, metaPixelId: settings.meta_pixel_id || null };
+  return {
+    ga4Id: settings.ga4_id || null,
+    metaPixelId: settings.meta_pixel_id || null,
+    ambassadorsEnabled: settings.ambassadors_enabled === "1",
+  };
 }
 
 export const links: LinksFunction = () => [
