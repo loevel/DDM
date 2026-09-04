@@ -126,6 +126,7 @@ export function Footer() {
     ["/boutique", "Boutique Perruques"],
     ["/quiz", "Quiz — Trouver ma perruque"],
     ["/accessoires", "Accessoires"],
+    ["/blog", "Le Journal"],
     ["/cartes-cadeaux", "Cartes Cadeaux"],
     ...(rootData?.ambassadorsEnabled ? ([["/ambassadrices", "Devenir ambassadrice"]] as [string, string][]) : []),
   ];

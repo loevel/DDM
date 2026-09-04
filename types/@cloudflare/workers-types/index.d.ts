@@ -236,3 +236,25 @@ interface ExportedHandler<Env = Record<string, unknown>> {
   scheduled?: ExportedHandlerScheduledHandler<Env>;
   [key: string]: unknown;
 }
+
+// ───── Workers AI ──────────────────────────────────────────────────────────
+// Shim minimal : on ne type que les deux formes de réponse qu'on consomme
+// (génération de texte et description d'image). Le SDK officiel expose des
+// types génériques par modèle, hors de portée de ce shim.
+
+interface AiTextGenerationInput {
+  prompt?: string;
+  messages?: { role: "system" | "user" | "assistant"; content: string }[];
+  max_tokens?: number;
+  temperature?: number;
+  image?: number[];
+}
+
+interface AiTextGenerationOutput {
+  response?: string;
+  description?: string;
+}
+
+interface Ai {
+  run(model: string, input: AiTextGenerationInput): Promise<AiTextGenerationOutput>;
+}
