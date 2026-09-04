@@ -161,7 +161,7 @@ export default function Promotions() {
                       )}
                       {daysLeft !== null && (
                         <p className={`flex items-center gap-1.5 ${daysLeft <= 3 ? "text-error font-semibold" : ""}`}>
-                          <span className="material-symbols-outlined text-sm" style={{ color: daysLeft <= 3 ? "var(--color-error)" : "var(--color-outline-variant)" }}>
+                          <span className={`material-symbols-outlined text-sm ${daysLeft <= 3 ? "text-error" : "text-outline-variant"}`}>
                             schedule
                           </span>
                           {daysLeft <= 0

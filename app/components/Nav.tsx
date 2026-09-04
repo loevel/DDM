@@ -227,11 +227,22 @@ function SearchBar() {
 export function Nav() {
   const { pathname } = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [compact, setCompact] = useState(false);
   const close = () => setMenuOpen(false);
 
+  // La barre se resserre au défilement. Piloté ici plutôt que depuis une route :
+  // l'accueil mutait les classes à la main sur le <nav>, alors que la hauteur est
+  // portée par le <div> interne — et l'état restait figé en changeant de page.
+  useEffect(() => {
+    const onScroll = () => setCompact(window.scrollY > 50);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+
   return (
-    <nav className="w-full top-0 sticky bg-surface/95 backdrop-blur-md shadow-sm z-50 transition-all duration-300">
-      <div className="flex justify-between items-center px-6 lg:px-12 xl:px-20 h-20 max-w-[90rem] mx-auto gap-6">
+    <nav className="w-full top-0 sticky bg-surface/95 backdrop-blur-md shadow-sm z-50">
+      <div className={`flex justify-between items-center px-6 lg:px-12 xl:px-20 max-w-[90rem] mx-auto gap-6 transition-[height] duration-300 ${compact ? "h-16" : "h-20"}`}>
         <Link to="/" className="flex items-center gap-3 shrink-0">
           <span className="font-serif text-2xl text-on-surface tracking-tight">DDM Wigs &amp; More</span>
         </Link>

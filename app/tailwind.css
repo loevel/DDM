@@ -1,3 +1,73 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* ─────────────────────────────────────────────────────────────────────────
+   Socle éditorial DDM — utilitaires partagés par les pages de vente.
+   Les couleurs restent définies dans tailwind.config.ts (source unique).
+   ───────────────────────────────────────────────────────────────────────── */
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    /* La nav est sticky (h-20) + barre d'annonce : sans ça les ancres
+       (#avis, #questions) atterrissent sous la nav. */
+    scroll-padding-top: 7rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  ::selection {
+    background-color: theme('colors.primary');
+    color: theme('colors.on-primary');
+  }
+
+  /* Anneau de focus visible au clavier uniquement — la souris ne le déclenche pas. */
+  :focus-visible {
+    outline: 2px solid theme('colors.primary');
+    outline-offset: 2px;
+  }
+
+  /* Les titres éditoriaux ne doivent jamais laisser un mot orphelin. */
+  h1, h2, h3 { text-wrap: balance; }
+}
+
+@layer components {
+  /* Filet fin pleine largeur — ponctuation des blocs éditoriaux. */
+  .ddm-rule {
+    @apply h-px w-full bg-outline-variant/60;
+  }
+
+  /* Folio numéroté des cartes produit (01, 02, 03…). */
+  .ddm-folio {
+    @apply font-sans text-[11px] font-bold tabular-nums tracking-[0.2em] text-on-surface-variant/40;
+  }
+
+  /* Sur-titre : petite capitale espacée au-dessus des titres. */
+  .ddm-eyebrow {
+    @apply font-sans text-[11px] font-bold uppercase tracking-[0.25em] text-primary;
+  }
+}
+
+@layer utilities {
+  /* Permutation d'image au survol : deux <img> empilées dans un parent .group.
+     La seconde n'apparaît que si le produit a un second visuel. */
+  .ddm-swap-front { @apply transition-opacity duration-500 ease-out; }
+  .group:hover .ddm-swap-front { @apply opacity-0; }
+
+  /* Zoom lent au survol — cadence commune à toutes les vignettes produit. */
+  .ddm-zoom { @apply transition-transform duration-[900ms] ease-out; }
+  .group:hover .ddm-zoom { @apply scale-[1.04]; }
+
+  /* Le survol ne doit pas agrandir l'image quand l'utilisateur préfère moins d'animation. */
+  @media (prefers-reduced-motion: reduce) {
+    .group:hover .ddm-zoom { @apply scale-100; }
+  }
+}

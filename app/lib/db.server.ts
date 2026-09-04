@@ -50,6 +50,34 @@ export async function getProducts(
 }
 
 
+/**
+ * Deuxième visuel de chaque produit — alimente la permutation d'image au survol
+ * dans les grilles. On retient la première image de product_media qui diffère de
+ * image_key : selon les fiches, la position 0 est parfois la photo déjà affichée
+ * sur la carte, et permuter vers la même image ne produirait aucun effet.
+ */
+export async function getSecondaryImages(db: D1Database, products: Product[]) {
+  const map: Record<number, string> = {};
+  const ids = products.map(p => p.id).filter(id => id > 0);
+  if (ids.length === 0) return map;
+  try {
+    const placeholders = ids.map(() => "?").join(",");
+    const rows = (await db.prepare(
+      `SELECT product_id, url FROM product_media
+       WHERE product_id IN (${placeholders}) AND type = 'image'
+       ORDER BY product_id ASC, position ASC`
+    ).bind(...ids).all<{ product_id: number; url: string }>()).results ?? [];
+    const mainImage = new Map(products.map(p => [p.id, p.image_key]));
+    for (const row of rows) {
+      if (map[row.product_id]) continue;
+      if (row.url && row.url !== mainImage.get(row.product_id)) map[row.product_id] = row.url;
+    }
+  } catch {
+    // table product_media pas encore créée
+  }
+  return map;
+}
+
 export async function getProduct(db: D1Database, slug: string) {
   return db.prepare("SELECT * FROM products WHERE slug = ?").bind(slug).first<Product>();
 }
