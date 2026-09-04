@@ -346,10 +346,12 @@ export default function Index() {
           accent="Texture"
         />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 md:gap-x-6 gap-y-8">
+          {/* « Bouclé » est servi en local (voir public/images/textures/CREDITS.md) : les
+              trois autres pointent encore sur des URLs Google qui finiront par expirer. */}
           {[
             { name: "Lisse", slug: "lisse", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBxubQU5RhI8bRCD25p6r_P5QJNuq_tzQhOf2rXOsSUHA0YQPZyw3g75A0k3D_TxdPc912kjItpmb11y438cb2YognsZBqILevEzQvH_2svSgC0rDOIBLqICODzydhQ7urdVYNAQsnr2mAEZkx7FwwyMFXKX6tUyuxN_4KFjAiCCMcH0VtHs8Qv0oJWwz5epfbVUt1-CXOCYxPovgAfAJdy_rZIlcHLEREFsiwKEGn8JbKrX1v16uZ4nklM_xOsPeO3cGn6syU-XaE" },
             { name: "Body Wave", slug: "body-wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuCCbcyZDFlEUORFmblZANwAMfCUCqOkctvG5QFcBrCOQV-nphWsF7tS20ffky6c3CvWhH-MwY9lAhxG4Mx9WFX8sDrVXcRxEy99UbwX4cq2ZfAwB3nqFjDFd76bjPOIfVDVeb8jfNtg7SwYuyT7fGR0ZgYEnAAas-huxvkHdytFje67w2b8064LnqZJ1ymKw6DSATRGodGcXyxaSGqk1BkAxekXOFYgdtoVUSvdEGBMvuN8NHYVJJsLrvxsE9M66QripwgSxnmpoKs" },
-            { name: "Bouclé", slug: "boucle", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuD60WEnVX-_yLSvBntPn9HrU1nMVF-gv9xPTRec1w6rXpr4rqxeI66WP2DFiBaYoulS2wO6R1uIRVXSB1rN_Pj5mbPzb303zLNDW2PMgXnyrLTWDMKLMvhBx22vlId7Jw9fQbhcsxLH7jR3S1tDLkN-zul8kq20lL6nk1BFRFurGFVrK-hXpavqiXVgAlhe7fVFC3PbQwTq9v59NgUOuZ3JIP-wvjMwOaXo_uciqMIP9hB2rhSlCzIgco_KjJbOZGb9ivAfYQEmlXA" },
+            { name: "Bouclé", slug: "boucle", img: "/images/textures/boucle.jpg" },
             { name: "Water Wave", slug: "water-wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU" },
           ].map((cat, i) => (
             <Link to={`/boutique?texture=${cat.slug}`} key={cat.name} className="group relative block">
