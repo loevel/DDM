@@ -25,6 +25,22 @@ annoncée — « Water Wave » affichait un à-plat de brosses.
 | `textures/boucle.webp` | Bouclé | [Pexels 8377218](https://www.pexels.com/photo/woman-touching-her-curly-hair-8377218/) | PNW Production | [Licence Pexels](https://www.pexels.com/license/) |
 | `textures/water-wave.webp` | Water Wave | [Pexels 13664457](https://www.pexels.com/photo/13664457/) | Omotaiyewoo | [Licence Pexels](https://www.pexels.com/license/) |
 
+Les six **produits de démonstration** (`app/lib/demo-products.ts`) affichés quand la
+base ne renvoie aucun produit — une photo par produit, choisie pour correspondre à la
+texture *et* à la couleur déclarées dans la fiche :
+
+| Fichier | Produit | Texture / couleur | Source | Auteur |
+|---|---|---|---|---|
+| `produits/honey-glaze.webp` | Honey Glaze Wave | body-wave / naturel | [Pexels 38023947](https://www.pexels.com/photo/38023947/) | Thedollasyn |
+| `produits/midnight-curl.webp` | Midnight Deep Curl | deep-wave / naturel | [Pexels 2331539](https://www.pexels.com/photo/2331539/) | Bestbe Models |
+| `produits/silk-body.webp` | Silk Body Wave | body-wave / naturel | [Pexels 3597931](https://www.pexels.com/photo/3597931/) | Ogo Johnson |
+| `produits/polished-straight.webp` | Polished Straight | lisse / naturel | [Pexels 36288157](https://www.pexels.com/photo/36288157/) | El gringo photo |
+| `produits/obsidian-curls.webp` | Obsidian Curls | kinky-curly / naturel | [Pexels 2011414](https://www.pexels.com/photo/2011414/) | Bestbe Models |
+| `produits/caramel-swirl.webp` | Caramel Swirl | body-wave / **ombré** | [Pexels 38979627](https://www.pexels.com/photo/38979627/) | Butch Carmichael |
+
+Toutes en licence Pexels. Avant, six produits se partageaient quatre visuels IA — deux
+paires en double — et aucun ne montrait la texture annoncée.
+
 Autres visuels sourcés :
 
 | Fichier | Source | Auteur | Licence |
@@ -82,6 +98,27 @@ donc hors du chemin critique du premier affichage.
 
 `lisse.webp` est bien plus légère à qualité égale : cheveux lisses sur fond uni,
 peu de détail fin, là où les trois autres sont des matières ondulées ou bouclées.
+
+### Les six visuels de produits de démonstration
+
+Toutes en **3:4, 900×1200, WebP q82** — c'est le ratio de `ProductTile` comme de la
+fiche produit, donc `object-cover` ne recadre rien. 438 Ko au total, mais ces images
+ne sortent que si la base ne renvoie aucun produit : la production affiche ses vrais
+produits et ne les charge jamais.
+
+Deux cadrages ont demandé un resserrement (`zoom ×1,5`) : `polished-straight`, dont
+la source laissait de larges bandes de fond blanc en haut et en bas, et `silk-body`,
+cadrée trop loin du sujet.
+
+### Fichiers supprimés
+
+`site/cheveux-caramel.webp`, `site/perruque-brune-lisse.webp` et
+`site/presentoirs-boutique.webp` — visuels IA d'origine, devenus orphelins une fois le
+carrousel, les tuiles de texture et les produits de démonstration repris. Vérifié
+qu'ils n'étaient plus référencés ni dans `app/`, ni dans le HTML servi en production.
+
+`site/cheveux-ondules-blond.webp` **reste** : c'est encore le visuel de la carte
+« Nouveautés » de l'accueil (`app/routes/_index.tsx`), le dernier rendu IA de la page.
 - **`textures/entretien.jpg`** — recadré en 16:9 (1600×900), ancré en haut de la source
   portrait pour cadrer la chevelure et non l'épaule. Sert le bloc « Préserver votre
   investissement » de `/boutique` et le fond décoratif de `/accessoires` — il remplace
