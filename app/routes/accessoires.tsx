@@ -140,7 +140,7 @@ export default function Accessoires() {
               <img
                 className="absolute right-[-10%] bottom-[-10%] w-1/2 opacity-20 group-hover:opacity-40 transition-opacity duration-700"
                 alt="Gouttelettes d'eau sur des mèches de cheveux"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJmaN6XSo60HjaEDBEe2d-Upy1tEFbjQyY0fVADNQr8ll4ONjXhE7woXgGVWqFyNDFKSqH74X_gs9YbvsMrLcc2CBSHBqPepdSN-GFU-4tQhm-g5y8n0XJqcFemk_yQIAwMNS8KIBIC3ZD-l9prK6i0x0P1ngfPG8WknfdYbgOIm8-Tv2GRNb5VjzGnZYCIImt4Sdn8pRodGe4u6wcrmyB8woacBfzUgbEJ7LVmjQWa6vhz4FMfkPKpdv6eleY1Fz7BbINOL8ZZho"
+                src="/images/textures/entretien.jpg"
               />
             </div>
             <div className="md:col-span-5 grid grid-rows-2 gap-6">

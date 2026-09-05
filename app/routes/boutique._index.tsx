@@ -428,8 +428,8 @@ export default function Boutique() {
               </Link>
             </div>
             <div className="flex-1 aspect-video w-full overflow-hidden">
-              <img alt="Entretien perruque" className="w-full h-full object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJmaN6XSo60HjaEDBEe2d-Upy1tEFbjQyY0fVADNQr8ll4ONjXhE7woXgGVWqFyNDFKSqH74X_gs9YbvsMrLcc2CBSHBqPepdSN-GFU-4tQhm-g5y8n0XJqcFemk_yQIAwMNS8KIBIC3ZD-l9prK6i0x0P1ngfPG8WknfdYbgOIm8-Tv2GRNb5VjzGnZYCIImt4Sdn8pRodGe4u6wcrmyB8woacBfzUgbEJ7LVmjQWa6vhz4FMfkPKpdv6eleY1Fz7BbINOL8ZZho" />
+              <img alt="Chevelure humide perlée de gouttelettes après un soin" className="w-full h-full object-cover"
+                src="/images/textures/entretien.jpg" />
             </div>
           </div>
         </section>
