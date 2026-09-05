@@ -15,7 +15,7 @@ export default function GuideEntretien() {
           <img
             className="w-full h-full object-cover brightness-90"
             alt="Perruque premium sur support en bois dans une boutique lumineuse"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuBZ_jijov05x1_pW_S3b9Bpd6kjsqJHPm6-GJgA_DIKUly_rfX2UfzcJNGIirKXAilKhLgSuG0DN5HczAFsFPRXPiRNdrQwlLS7aw3bmiUUjykBj0cTTH5CWF87u_rGSxIo30qxFlyhFoP_m-Dz_o5ny66FJ05pbS0dCjTya5gSo_u5ofgy2V31ArF47bcggFPuJkevSpwxemoOuVvhGCEB_6Dmx46x-3qjqUGAbOFqz82n6cUdy30xodUiLvVmgb8DoqwbEYasT0A"
+            src="/images/guide/banniere.webp"
           />
           <div className="absolute inset-0 bg-gradient-to-r from-surface/40 to-transparent"></div>
         </div>
@@ -131,7 +131,7 @@ export default function GuideEntretien() {
             <img
               className="w-full aspect-[4/5] object-cover grayscale-[20%]"
               alt="Poste de coiffage professionnel"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuBfxlxIxum7IB9LcVghC8rN_G3un24X-gbdBRHk3BQDFeoC9qDvi4LtVH_NRJl39wxf_BalCy8thKtXlgnmdOMOG9qmnJjmwnsGJhh1jwLzt0rHqec-dcddNyaLrd-kUNl5R1xoxinuyAMaTWoF7MUqzBGg1W8pgvBQ-2yHScnm9x7N6HrciHiRh6zdZ3bFruWIV_nRntXMtJHH30g2lK8QNsFevrTtxtxRUe5qLXEdqAVpposbQTHUOE287b56uLoNFn_uSzw0MTM"
+              src="/images/guide/poste-coiffage.webp"
             />
           </div>
           <div className="order-1 lg:order-2 space-y-12">
@@ -185,7 +185,7 @@ export default function GuideEntretien() {
                 <img
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   alt="Duo Shampoing & Soin"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_ohOIzzR2yvDFxIJPRveVs81SAtx8KInUJZi9prwY9juyXgNCxYpxxAmXozjAgmPwOeC3ciKddflZ5k1Q9EP3mdBfEZCzMvVHbgIcFy7I6_h6DpaCtU--M9qi-X-2K_XUj2oNh1J9NnuGrAEzevBp42FWDsbacS_bNoAkSJV3aR-Rr-ZAnZDwQTX4gsXedeja-tAROJ_zIN0yJcFwdWCQk9Q-TMrdNUmFlOIdsQme5_nJWsimxNSA-oUfjCGmxiCR_S_Zy9y6rDM"
+                  src="/images/guide/shampoing-soin.webp"
                 />
               </div>
               <h3 className="font-headline-md text-headline-md mb-1">Duo Shampoing & Soin</h3>
@@ -197,7 +197,7 @@ export default function GuideEntretien() {
                 <img
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   alt="Peigne Signature"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPfIiYC0VLcxz1UeUz-CNhMSIWO3osAC7XR-JFUqRgkoRCH5GdQc-jdpWlxjO2sSpWpkY1fmwPc7NKlj7eE0DxPGd8_50gEuTxBu6eBYQk_2tAEw2ltAfjDPnoPpwaJWT9w0_yu3negVhfTJSKkdjKtsyIwghL6K2prfoMkpXDUvP3_jR2E26WHNjOUJkZDD_zEB1MY13-r7e9aEPpJDZwyPzj8-fUxGtKeTP5EeFwlPZ33mw3hqBCe9EiiLWOqZLdbm1_cSpcBeQ"
+                  src="/images/guide/peigne-signature.webp"
                 />
               </div>
               <h3 className="font-headline-md text-headline-md mb-1">Peigne Signature</h3>
@@ -209,7 +209,7 @@ export default function GuideEntretien() {
                 <img
                   className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
                   alt="Support Pliable Luxury"
-                  src="https://lh3.googleusercontent.com/aida-public/AB6AXuA7lA6D5hPo3Db0WC9rZaCKyTZLdhspr9LQaAv-63yRgRNYcMjAUfQqMSKH-IKcQIFZj35MVKSQrQDeYO9-xDKzX6HM13rtofr5v_UIO8aAcHtYCHRGBXAytqxNyHzzHNmwghqwdUz6MD4fuzERk-ajB2zRVNh_45-dgBCyIu7TQTgEpUGQ_onubLDvO_PVtLBEvxsWwoQNUBUqkEmjSQpQvYCCoLLw5xHoovk2hWYcYjdkw1CQTkuuMrnZOE7PtNdsLrF2n38JyAM"
+                  src="/images/guide/support-pliable.webp"
                 />
               </div>
               <h3 className="font-headline-md text-headline-md mb-1">Support Pliable Luxury</h3>

@@ -41,7 +41,7 @@ export default function Accessoires() {
             <img
               className="w-full h-full object-cover grayscale-[20%]"
               alt="Kit d'entretien luxueux pour perruques"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuADEe86hXJvt-nGbgGjJ9CwLupcXP8Svempc1q_tAjSYL5tQZcA-CIUiVHRxQyqZMEurpn9DMrOTFwZ7yUqBl74EyKrY-X5ehYTh_GNl4pI_JvH9kQ3EjksdatVm2Zjxd0YAvGEZzJcc1jACVztB7lNUcOr3k6AWsroG__zJ4MNJ_qr0YO3RkROrKdq2vMIV4ugIosdxFwn6ECfGVgtuyOBz-TQOszKe4wKd8OwDE5xNLIW13W0M253pcEA1WqDUzSQT4fhRc8JQAU"
+              src="/images/accessoires/kit-entretien.webp"
             />
           </div>
         </div>
@@ -92,10 +92,10 @@ export default function Accessoires() {
           /* Fallback static grid */
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-grid-gutter">
             {[
-              { name: "Sculptural Oak Wig Stand", price: "45.00", badge: "Essentials", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAr0Cn4polkTmpo9gcitOv4qVL2kComds9moqC84s8su8umjpIqVVW25tZRTWgb7dQH8vZ_9CZQel1f6_1Cu5sF3nzCJExL0Htfl4kmPx993hojKjigmJMq-rDW__Nj0yYjiYxjgC2J4xR2XlVliPJfdkyBrASqAa4Pd75eYj5PVcwD465VPzm8YKSJ6qEi1BQAH5HdL1JPkInQ13e-kxSmm26QfQz18Tk6FVYEGIiWI8fvlOEB5V5NuCASm6Xkigac6DlWUa85s54" },
-              { name: "Signature Tortoise Comb Set", price: "32.00", badge: "Tools", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuCSCD6lBB2Gfd0-WWIotZmyokLXqrFHcBrSVm3tou6yMZsk_s7YcM3ymuEmPnAhZoVHHUdDuc12bbkdJZ4pBEdftTXeqLLOnf9uRKvn1wVigLbzzyIhu_j-qBCKAiZdNmTnv4Kg0gn71sZznkKj2HQO2uQ4Zw27-IpOiWHrTlaz5Zd0-GXZM7WkQloawWJNY4FDRurgwR0dhA6H1TVVY9tmGSc-KPbWb7xk7vnUvrSkl08rROULg9k5GYrweF4Owb6a93RHiEXzGWI" },
-              { name: "Ultra-Hold Invisible Kit", price: "58.00", badge: "Adhesives", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuB6oiyuVot0qQUN1FZFp0RkKRe8-45UK3_iUWzzxTb9TwYT-UBCQTwg30NDEdixYZL9CeWF5j27JdHuoZG5HJSrjJ-VbIA5_BMOcJnnaXoftCkTjt4z3xvwzbiwhIza7htQLRhGvvkGJkOgHTLdsUqvFOpP9EW443Cfs9928-jjEyzi1_4nOEFydSvpGliXk5EXwEetcuB78fFiegOk8IEzi3nIUF9M5T0wttvPVuwaxgIbLrXkzNoZtZQZOLYCLy1jC2uH-kvGxQY" },
-              { name: "The Restoration Trinity", price: "110.00", badge: "Kits", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuB2G1VY6X2PsJ_rzQ5le06l7ZMHBXiplpo8LBCVFSV2Kf9JMYS6DPmjvFwDgjLkIZ0i4DpQZh5yRWt_YYwHF6h6GvR4_w6ENtb6HC3QDMs2jwd_f_KdEPDTKaLFqPx7HTlWzysCw4a3WD_d8mTL5mNT2JxPAs05X8VaSmaik8PhY1KCC7r4w0m5ICLgOSHNQCNkk0Gaad2Lkk2nBPk79TFRw2Hy2jNburImFuMOZlUnetx061gIXaZupqqq1j552GmZOHnOmQ4qALc" },
+              { name: "Sculptural Oak Wig Stand", price: "45.00", badge: "Essentials", img: "/images/accessoires/support-chene.webp" },
+              { name: "Signature Tortoise Comb Set", price: "32.00", badge: "Tools", img: "/images/accessoires/peigne-ecaille.webp" },
+              { name: "Ultra-Hold Invisible Kit", price: "58.00", badge: "Adhesives", img: "/images/accessoires/kit-adhesif.webp" },
+              { name: "The Restoration Trinity", price: "110.00", badge: "Kits", img: "/images/accessoires/trio-restauration.webp" },
             ].map((p) => (
               <div key={p.name} className="group cursor-pointer">
                 <div className="aspect-[4/5] bg-surface-container-low overflow-hidden mb-6 relative">

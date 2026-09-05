@@ -14,7 +14,7 @@ export default function NotreHistoire() {
         <img
           alt="The Art of Confidence"
           className="w-full h-full object-cover"
-          src="https://lh3.googleusercontent.com/aida-public/AB6AXuD_hcUtSYn3ncRa7_DCqlfZGBBat_m3Pywe2ehB1M2MSO1hjyBcfKkdL4ZR1pUXYqSKiVdwwWPNfso0yWEHbs-AkKN182fW99oWzd9L4u1vL1-MhvyamVC7MIe_a-Dqr6PLN7aV4mMj6_hn4KUUn9aEzGwc-CpBQ7-hDYpA3eFv7TqXt0bxh9mYRm4gKJz0Jy8_3x4OgkGeu3wEgx38QaPe8O--iWzxwLgh0AM3QIIPG_36uj_35CNLnZM-ywL5RljE0bcalrE6nco"
+          src="/images/histoire/art-confiance.webp"
         />
         <div className="absolute inset-0 flex flex-col justify-end pb-section-gap-desktop px-grid-margin-desktop" style={{ background: "linear-gradient(to bottom, rgba(252, 249, 248, 0) 0%, rgba(252, 249, 248, 0.8) 100%)" }}>
           <div className="max-w-container-max-width mx-auto w-full">
@@ -48,7 +48,7 @@ export default function NotreHistoire() {
               <img
                 alt="Mission de Qualité"
                 className="w-full h-full object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuBOVz3qDTZQ4BbIQmSayKz51w4NIg_U4nx5dNzg1J1V3DMKR8Lem6Uj6ALP8Qvk4n1nCkL4PAZ5MNRwgV7_-FTstmeWWYYy7e2P0X3aoyILag27tC7BddzG9tqQCcIUv0MuitBPi7bfZG8CUrpytCco5ao7Cylzb3G7nWPKsQGamqrsMUm8ni1FdBHMdsrsLgQhTSxCTycmKJ3GHVaawZk7XlRJzrGLlM_22xrbaqJTVlCdCxfbtVvXV_f-ejUlSPFVyP28Qf6lZVY"
+                src="/images/histoire/mission-qualite.webp"
               />
             </div>
           </div>
@@ -96,12 +96,12 @@ export default function NotreHistoire() {
               <img
                 alt="Détail noué à la main"
                 className="w-full aspect-square object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuCevynVFt1W2H7lj6qVNLogRxKAhIC2wPdqEmz4aSOEOIJcm537X14Blr-8W-Uhg4NkE_kTPDKOZrzptXo3TSYKwHpxJCLAfPOs5uNXhKg-Xl0Q7dXPtI8Kxk3AMt9tVbnNkEGTk5pi_bRS6DO7OSsVplY7VlKtdqUTgdzhXFzAEMQnlphUqg1lYDSB_TkD7Q10kLeH92F-NlD3YEly_UAQV3uWYdIXMimGg5vv7Xuz_F6KVLJ4Zd6Z3n3PWr_f8TECf0Bz2M2jF8Q"
+                src="/images/histoire/noue-main.webp"
               />
               <img
                 alt="Texture base en soie"
                 className="w-full aspect-square object-cover mt-12"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-8KgV_W8uMA9QcXIaa8gA7f1KOrxu95NoZX-Ifs6y2HCzuBEOssSARGDVXuYHMaDVhI5CoEwmrIhbqn5aCb3zjNAAQnJHXkh_F6_ZBLpNswLm0Pq-MCsFO2wgOSSbmDk4gYxvFcoDGlRhB7tsZ8yjKjcHDSo-j4hLeJnZysJ1d7STO12EJd1l0KFJ4uM_T-GgLIOPcmStjDOGDNQlOIap1Wza8XzDvlfLCdfHZmWcXTKmwZaJsgJzX_md56srPCf9q4dbVPnIs_o"
+                src="/images/histoire/base-soie.webp"
               />
             </div>
             <div className="order-1 md:order-2 space-y-8">

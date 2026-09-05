@@ -76,7 +76,7 @@ export default function Livraison() {
           <img
             className="w-full h-full object-cover"
             alt="Emballage luxueux de retour"
-            src="https://lh3.googleusercontent.com/aida-public/AB6AXuAIpLaTR38BRGS3HtcwK10cVsEGmRq211KffpkcZj_sgsENJLZVfVbCvEcj22n-dbqWRbEe64Yh-h8KgavOquQLZxEOYUEJKGDO5tZJelkMaIJKWetJbJ-1O-ujFeNlzftKyorrhaCDsigDBGrVjfvanO9DhMXM_7MRXzGeWXqVXgnYQ-ZaUTiVCGra9Cn2uT4p8FUBjmUcYezv3u4s-hj74uUQIjit-Bowznep5M3b0MrjAAUBX7lVsuAh4EYFmqjpTPaDfbJK4m8"
+            src="/images/livraison/emballage-retour.webp"
           />
         </div>
         <div className="order-1 md:order-2 md:pl-12">
@@ -103,7 +103,7 @@ export default function Livraison() {
       <section className="relative py-24 bg-surface-container-low rounded-2xl overflow-hidden">
         <div
           className="absolute inset-0 bg-cover bg-center w-full h-full opacity-20"
-          style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuA6XFsSw5cxzeVc0AMwk-0wekdOqg5IDBX_1rPS36nMDeClOy7blyCh8sHb_59b2oqW_5MOxoe3-1RGNc9ZRz6WeHP30Hnd5-ru0TWYoacAnS4XxT7iP7qfY_Gyh_WjXBJ-zNWuhyZuAAbPjAqcbEl-7Phn_qiie1IhiP4Eb-zmsvFmTJkbzSS9KS1LKISA0VU0Ig_IPpGe8PZX99MnlKy9Uah4YT9GGbQQPQZBg5887u4GvYAbkE3VqEQ7w3AfkKS7pRyFFK6P_f8')" }}
+          style={{ backgroundImage: "url('/images/livraison/emballage-art.webp')" }}
         ></div>
         <div className="relative z-10 max-w-4xl mx-auto text-center px-4">
           <h2 className="font-headline-xl text-headline-xl text-primary mb-6">L'Art de l'Emballage</h2>

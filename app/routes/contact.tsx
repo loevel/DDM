@@ -97,7 +97,7 @@ export default function Contact() {
         <div className="absolute inset-0">
           <div
             className="w-full h-full bg-cover bg-center"
-            style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuB7rScq-XYyeC3Ypz_yDaUUWcT7cqyxXVpzMDxsBIFJLClVJYGzkSOosqD5bZNBL3Y3wLJjIORpXM9_OKZjZaeDtOHaAF2i9o9i8iMNuYCnAiB6V23VGogrQvgE9Q7VY1oWk9uQSgA1jUmAgL_ldjlHR57ELiYIw6fk84kEU8iGVI4FHNe3PluBNBqHd6ehc57AmLKrwQKrwEV5aSo84fK_flyju-d6P9b30YmpNUiOCqV8XI1WgmrCTAXSv698kX05nBeSmyn_D0Y')" }}
+            style={{ backgroundImage: "url('/images/contact/banniere.webp')" }}
           />
           <div className="absolute inset-0 bg-black/40" />
         </div>
@@ -341,7 +341,7 @@ export default function Contact() {
       <section className="h-72 relative overflow-hidden flex items-center justify-center">
         <div
           className="absolute inset-0 bg-cover bg-fixed bg-center"
-          style={{ backgroundImage: "url('https://lh3.googleusercontent.com/aida-public/AB6AXuAa1qx-wHT2dv8Wa_5NCqIlRpueo_7vrV1u2_k4QknFdK4Q3zlAhwEFKcf8ofgSB3CzHSvVqdBD_2NeEoC3Rhe1dGDdu4F_e5IZrPblWMDb5OyK0rS1_B6IqP4uQBvDYYiczr-qUhWYKaL7o2MGD4yDvRvNzD4et3v91d93J7Jmc3HEMPE9qzCFUBxFrpgUI69g5e9Pj3SPrc3AUOlzSY7tMiVKsZ8ZxbTnH0zyLH4CgxRwcFnt5l8ZfCXN0FFx05bL1tRob8BxyPQ')" }}
+          style={{ backgroundImage: "url('/images/contact/citation.webp')" }}
         />
         <div className="absolute inset-0 bg-black/50" />
         <blockquote className="relative z-10 font-serif text-xl md:text-2xl italic text-white max-w-xl mx-auto text-center px-8 leading-relaxed">

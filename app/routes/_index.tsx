@@ -10,7 +10,7 @@ import type { Product } from "~/lib/db.server";
 const BASE = "https://ddmwigs.com";
 const SITE_DESC = "Perruques en cheveux humains 100% — Lace front, HD lace, glueless. Livraison rapide au Canada. DDM Wigs & More, Montréal.";
 // Image du hero — utilisée pour les partages sociaux (og:image)
-const OG_IMAGE = "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU";
+const OG_IMAGE = `${BASE}/images/site/cheveux-caramel.webp`;
 
 export const meta: MetaFunction = () => [
   { title: "DDM Wigs & More | Perruques Cheveux Humains — Montréal" },
@@ -211,7 +211,7 @@ export default function Index() {
             <img
               alt="Nouveautés"
               className="absolute inset-0 w-full h-full object-cover ddm-zoom"
-              src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCbcyZDFlEUORFmblZANwAMfCUCqOkctvG5QFcBrCOQV-nphWsF7tS20ffky6c3CvWhH-MwY9lAhxG4Mx9WFX8sDrVXcRxEy99UbwX4cq2ZfAwB3nqFjDFd76bjPOIfVDVeb8jfNtg7SwYuyT7fGR0ZgYEnAAas-huxvkHdytFje67w2b8064LnqZJ1ymKw6DSATRGodGcXyxaSGqk1BkAxekXOFYgdtoVUSvdEGBMvuN8NHYVJJsLrvxsE9M66QripwgSxnmpoKs"
+              src="/images/site/cheveux-ondules-blond.webp"
             />
             <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
             <div className="absolute inset-x-8 bottom-8 text-white">
@@ -349,10 +349,10 @@ export default function Index() {
           {/* « Bouclé » est servi en local (voir public/images/textures/CREDITS.md) : les
               trois autres pointent encore sur des URLs Google qui finiront par expirer. */}
           {[
-            { name: "Lisse", slug: "lisse", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBxubQU5RhI8bRCD25p6r_P5QJNuq_tzQhOf2rXOsSUHA0YQPZyw3g75A0k3D_TxdPc912kjItpmb11y438cb2YognsZBqILevEzQvH_2svSgC0rDOIBLqICODzydhQ7urdVYNAQsnr2mAEZkx7FwwyMFXKX6tUyuxN_4KFjAiCCMcH0VtHs8Qv0oJWwz5epfbVUt1-CXOCYxPovgAfAJdy_rZIlcHLEREFsiwKEGn8JbKrX1v16uZ4nklM_xOsPeO3cGn6syU-XaE" },
-            { name: "Body Wave", slug: "body-wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuCCbcyZDFlEUORFmblZANwAMfCUCqOkctvG5QFcBrCOQV-nphWsF7tS20ffky6c3CvWhH-MwY9lAhxG4Mx9WFX8sDrVXcRxEy99UbwX4cq2ZfAwB3nqFjDFd76bjPOIfVDVeb8jfNtg7SwYuyT7fGR0ZgYEnAAas-huxvkHdytFje67w2b8064LnqZJ1ymKw6DSATRGodGcXyxaSGqk1BkAxekXOFYgdtoVUSvdEGBMvuN8NHYVJJsLrvxsE9M66QripwgSxnmpoKs" },
+            { name: "Lisse", slug: "lisse", img: "/images/site/perruque-brune-lisse.webp" },
+            { name: "Body Wave", slug: "body-wave", img: "/images/site/cheveux-ondules-blond.webp" },
             { name: "Bouclé", slug: "boucle", img: "/images/textures/boucle.jpg" },
-            { name: "Water Wave", slug: "water-wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU" },
+            { name: "Water Wave", slug: "water-wave", img: "/images/site/cheveux-caramel.webp" },
           ].map((cat, i) => (
             <Link to={`/boutique?texture=${cat.slug}`} key={cat.name} className="group relative block">
               <div className="relative aspect-[3/4] overflow-hidden bg-surface-container">
@@ -505,7 +505,7 @@ const SLIDES = [
     subtitle: "Perruques en cheveux humains 100% — sélectionnées pour la femme moderne, livrées à Montréal.",
     cta: { label: "Découvrir la boutique", to: "/boutique" },
     cta2: { label: "Nous contacter", to: "/contact" },
-    img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU",
+    img: "/images/site/cheveux-caramel.webp",
     gradient: "to right",
   },
   {
@@ -514,7 +514,7 @@ const SLIDES = [
     subtitle: "Profitez de nos promotions limitées — dentelle invisible, rendu naturel exceptionnel.",
     cta: { label: "Voir les promotions", to: "/promotions" },
     cta2: { label: "Toute la collection", to: "/boutique" },
-    img: "https://lh3.googleusercontent.com/aida-public/AB6AXuCCbcyZDFlEUORFmblZANwAMfCUCqOkctvG5QFcBrCOQV-nphWsF7tS20ffky6c3CvWhH-MwY9lAhxG4Mx9WFX8sDrVXcRxEy99UbwX4cq2ZfAwB3nqFjDFd76bjPOIfVDVeb8jfNtg7SwYuyT7fGR0ZgYEnAAas-huxvkHdytFje67w2b8064LnqZJ1ymKw6DSATRGodGcXyxaSGqk1BkAxekXOFYgdtoVUSvdEGBMvuN8NHYVJJsLrvxsE9M66QripwgSxnmpoKs",
+    img: "/images/site/cheveux-ondules-blond.webp",
     gradient: "to right",
   },
   {
@@ -523,7 +523,7 @@ const SLIDES = [
     subtitle: "Des textures authentiques qui respirent et bougent comme vos propres cheveux.",
     cta: { label: "Explorer les textures", to: "/boutique?texture=boucle" },
     cta2: { label: "Guide d'entretien", to: "/guide-entretien" },
-    img: "https://lh3.googleusercontent.com/aida-public/AB6AXuD60WEnVX-_yLSvBntPn9HrU1nMVF-gv9xPTRec1w6rXpr4rqxeI66WP2DFiBaYoulS2wO6R1uIRVXSB1rN_Pj5mbPzb303zLNDW2PMgXnyrLTWDMKLMvhBx22vlId7Jw9fQbhcsxLH7jR3S1tDLkN-zul8kq20lL6nk1BFRFurGFVrK-hXpavqiXVgAlhe7fVFC3PbQwTq9v59NgUOuZ3JIP-wvjMwOaXo_uciqMIP9hB2rhSlCzIgco_KjJbOZGb9ivAfYQEmlXA",
+    img: "/images/site/presentoirs-boutique.webp",
     gradient: "to right",
   },
   {
@@ -532,7 +532,7 @@ const SLIDES = [
     subtitle: "Nos perruques glueless prêtes à porter — sans colle, sans effort, sans compromis sur le style.",
     cta: { label: "Voir les glueless", to: "/boutique?glueless=1" },
     cta2: { label: "Body Wave", to: "/boutique?texture=body-wave" },
-    img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBxubQU5RhI8bRCD25p6r_P5QJNuq_tzQhOf2rXOsSUHA0YQPZyw3g75A0k3D_TxdPc912kjItpmb11y438cb2YognsZBqILevEzQvH_2svSgC0rDOIBLqICODzydhQ7urdVYNAQsnr2mAEZkx7FwwyMFXKX6tUyuxN_4KFjAiCCMcH0VtHs8Qv0oJWwz5epfbVUt1-CXOCYxPovgAfAJdy_rZIlcHLEREFsiwKEGn8JbKrX1v16uZ4nklM_xOsPeO3cGn6syU-XaE",
+    img: "/images/site/perruque-brune-lisse.webp",
     gradient: "to right",
   },
 ];
