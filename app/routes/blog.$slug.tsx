@@ -95,7 +95,7 @@ export default function Article() {
     publisher: {
       "@type": "Organization",
       name: "DDM Wigs & More",
-      logo: { "@type": "ImageObject", url: `${BASE}/images/ddm-logo.svg` },
+      logo: { "@type": "ImageObject", url: `${BASE}/images/ddm-logo.png` },
     },
     mainEntityOfPage: { "@type": "WebPage", "@id": url },
     wordCount: post.body.split(/\s+/).filter(Boolean).length,

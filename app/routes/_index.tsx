@@ -38,7 +38,7 @@ const LOCAL_BUSINESS_JSONLD = {
   description: SITE_DESC,
   url: BASE,
   image: OG_IMAGE,
-  logo: `${BASE}/images/ddm-logo.svg`,
+  logo: `${BASE}/images/ddm-logo.png`,
   address: {
     "@type": "PostalAddress",
     addressLocality: "Montréal",
