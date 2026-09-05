@@ -16,6 +16,7 @@ const STATIC = [
   { url: "/contact",        priority: "0.5", changefreq: "monthly" },
   { url: "/livraison",      priority: "0.5", changefreq: "monthly" },
   { url: "/quiz",           priority: "0.5", changefreq: "monthly" },
+  { url: "/blog",           priority: "0.7", changefreq: "weekly" },
 ];
 
 function urlEntry(loc: string, lastmod: string, changefreq: string, priority: string) {
@@ -26,15 +27,26 @@ export async function loader({ context }: LoaderFunctionArgs) {
   const db = getDB(context);
   const today = new Date().toISOString().slice(0, 10);
 
-  const [products, collections] = await Promise.all([
+  const [products, collections, posts] = await Promise.all([
     db.prepare("SELECT slug, updated_at FROM products WHERE stock > 0 ORDER BY updated_at DESC").all<{ slug: string; updated_at: string }>(),
     db.prepare("SELECT slug FROM collections WHERE active = 1").all<{ slug: string }>(),
+    // Le blog peut ne pas être migré sur un environnement donné : on n'échoue
+    // pas tout le sitemap pour autant.
+    db.prepare(`SELECT slug, updated_at FROM blog_posts
+                WHERE status = 'published'
+                   OR (status = 'scheduled' AND published_at IS NOT NULL AND published_at <= datetime('now'))
+                ORDER BY published_at DESC`)
+      .all<{ slug: string; updated_at: string }>()
+      .catch(() => ({ results: [] as { slug: string; updated_at: string }[] })),
   ]);
 
   const entries = [
     ...STATIC.map(p => urlEntry(`${BASE}${p.url}`, today, p.changefreq, p.priority)),
     ...(products.results ?? []).map(p =>
       urlEntry(`${BASE}/boutique/${p.slug}`, p.updated_at?.slice(0, 10) ?? today, "weekly", "0.8")
+    ),
+    ...(posts.results ?? []).map(p =>
+      urlEntry(`${BASE}/blog/${p.slug}`, p.updated_at?.slice(0, 10) ?? today, "monthly", "0.6")
     ),
     ...(collections.results ?? []).map(c =>
       urlEntry(`${BASE}/collections/${c.slug}`, today, "weekly", "0.7")

@@ -6,6 +6,7 @@ import { getDB, getProducts } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
 import { cfImage } from "~/lib/images";
 import { DEMO_MAP } from "~/lib/demo-products";
+import { ProductTile } from "~/components/ProductTile";
 import { getCustomerId } from "~/lib/session.server";
 import { getCustomer } from "~/lib/auth.server";
 
@@ -272,6 +273,7 @@ export default function FicheProduit() {
   const [wishlist, setWishlist] = useState(false);
   const [wishlistLoaded, setWishlistLoaded] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
+  const [zoomOrigin, setZoomOrigin] = useState<string | null>(null);
   const [showSticky, setShowSticky] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
   const ctaRef = useRef<HTMLDivElement>(null);
@@ -369,6 +371,21 @@ export default function FicheProduit() {
 
   const activeItem = media[activeIdx] ?? null;
 
+  // Zoom au survol : l'origine de la transformation suit le curseur, ce qui donne
+  // l'impression d'inspecter la photo à la loupe plutôt que de la voir grossir.
+  function handleZoomMove(e: React.MouseEvent<HTMLDivElement>) {
+    if (!activeItem || activeItem.type !== "image") return;
+    const r = e.currentTarget.getBoundingClientRect();
+    const x = ((e.clientX - r.left) / r.width) * 100;
+    const y = ((e.clientY - r.top) / r.height) * 100;
+    setZoomOrigin(`${x}% ${y}%`);
+  }
+
+  function selectMedia(i: number) {
+    setActiveIdx(i);
+    setZoomOrigin(null); // sinon la nouvelle photo s'ouvre déjà zoomée
+  }
+
   // URL d'embed pour les vidéos
   function videoEmbedUrl(url: string): string {
     const yt = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&?/\s]+)/);
@@ -444,99 +461,105 @@ export default function FicheProduit() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 xl:gap-20 mb-20">
 
         {/* ── Galerie ── */}
-        <div className="space-y-4">
-          {/* Média principal */}
-          <div className="aspect-[3/4] bg-surface-container overflow-hidden relative group">
-            {activeItem ? (
-              activeItem.type === "video" ? (
-                /* Lecteur vidéo intégré */
-                <iframe
-                  src={videoEmbedUrl(activeItem.url)}
-                  className="w-full h-full"
-                  allow="autoplay; fullscreen; picture-in-picture"
-                  allowFullScreen
-                  title={p.name}
-                />
-              ) : (
-                <img
-                  src={cfImage(activeItem.url, "zoom") ?? activeItem.url}
-                  alt={activeItem.alt_text ?? p.name}
-                  className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-[1.02]"
-                />
-              )
-            ) : (
-              <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-outline-variant">
-                <span className="material-symbols-outlined text-6xl">styler</span>
-                <p className="font-sans text-sm">Photo à venir</p>
-              </div>
-            )}
+        <div className="flex gap-3 lg:gap-4">
 
-            {/* Badges */}
-            <div className="absolute top-4 left-4 flex flex-col gap-2 pointer-events-none">
-              {discount && (
-                <span className="bg-error text-on-error px-3 py-1 text-xs font-bold uppercase tracking-widest">
-                  -{discount}%
-                </span>
-              )}
-              {p.hd_lace === 1 && (
-                <span className="bg-surface/90 backdrop-blur text-on-surface border border-outline-variant/40 px-3 py-1 text-xs font-bold uppercase tracking-widest">
-                  HD Lace
-                </span>
-              )}
-              {p.pret_a_porter === 1 && (
-                <span className="bg-surface/90 backdrop-blur text-on-surface border border-outline-variant/40 px-3 py-1 text-xs font-bold uppercase tracking-widest">
-                  Prêt à porter
-                </span>
-              )}
-            </div>
-
-            {/* Compteur médias (quand plusieurs) */}
-            {media.length > 1 && activeItem?.type !== "video" && (
-              <span className="absolute bottom-4 right-4 bg-black/50 text-white text-xs font-mono px-2 py-0.5">
-                {activeIdx + 1} / {media.length}
-              </span>
-            )}
-
-            {/* Wishlist */}
-            <button
-              onClick={toggleWishlist}
-              aria-label={wishlist ? "Retirer des favoris" : "Ajouter aux favoris"}
-              title={wishlistLoaded ? (wishlist ? "Retirer des favoris" : "Ajouter aux favoris") : "Chargement…"}
-              className="absolute top-4 right-4 w-9 h-9 bg-surface/90 backdrop-blur flex items-center justify-center hover:bg-surface transition-colors z-10">
-              <span className={`material-symbols-outlined text-xl ${wishlist ? "text-error" : "text-on-surface-variant"}`}
-                style={{ fontVariationSettings: wishlist ? "'FILL' 1" : "'FILL' 0" }}>
-                favorite
-              </span>
-            </button>
-          </div>
-
-          {/* Miniatures (images + vidéos) */}
+          {/* Rail de miniatures — vertical dès sm, replacé sous l'image en dessous */}
           {media.length > 1 && (
-            <div className="flex gap-2 flex-wrap">
-              {media.map((item, i) => {
-                const thumb = item.type === "image"
-                  ? (cfImage(item.url, "thumbnail") ?? item.url)
-                  : item.thumbnail_url;
-                return (
-                  <button key={i} onClick={() => setActiveIdx(i)}
-                    className={`w-20 h-20 overflow-hidden shrink-0 border-2 transition-colors relative ${activeIdx === i ? "border-primary" : "border-transparent hover:border-outline-variant"}`}>
-                    {thumb ? (
-                      <img src={thumb} alt={item.alt_text ?? ""} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full bg-surface-container flex items-center justify-center">
-                        <span className="material-symbols-outlined text-outline-variant text-2xl">smart_display</span>
-                      </div>
-                    )}
-                    {item.type === "video" && (
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                        <span className="material-symbols-outlined text-white text-xl">play_circle</span>
-                      </div>
-                    )}
-                  </button>
-                );
-              })}
+            <div className="hidden sm:flex flex-col gap-2.5 w-[4.5rem] lg:w-20 shrink-0">
+              {media.map((item, i) => (
+                <MediaThumb key={i} item={item} active={activeIdx === i} onSelect={() => selectMedia(i)} />
+              ))}
             </div>
           )}
+
+          <div className="flex-1 min-w-0 space-y-3">
+            {/* Média principal */}
+            <div
+              className="aspect-[3/4] bg-surface-container overflow-hidden relative group"
+              onMouseMove={handleZoomMove}
+              onMouseLeave={() => setZoomOrigin(null)}
+            >
+              {activeItem ? (
+                activeItem.type === "video" ? (
+                  /* Lecteur vidéo intégré */
+                  <iframe
+                    src={videoEmbedUrl(activeItem.url)}
+                    className="w-full h-full"
+                    allow="autoplay; fullscreen; picture-in-picture"
+                    allowFullScreen
+                    title={p.name}
+                  />
+                ) : (
+                  <img
+                    src={cfImage(activeItem.url, "zoom") ?? activeItem.url}
+                    alt={activeItem.alt_text ?? p.name}
+                    className="w-full h-full object-cover transition-transform duration-300 ease-out"
+                    style={zoomOrigin ? { transformOrigin: zoomOrigin, transform: "scale(2)" } : undefined}
+                  />
+                )
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-3 text-outline-variant">
+                  <span className="material-symbols-outlined text-6xl">styler</span>
+                  <p className="font-sans text-sm">Photo à venir</p>
+                </div>
+              )}
+
+              {/* Badges */}
+              <div className="absolute top-4 left-4 flex flex-col items-start gap-2 pointer-events-none">
+                {discount && (
+                  <span className="bg-error text-on-error px-3 py-1 text-xs font-bold uppercase tracking-widest">
+                    −{discount}%
+                  </span>
+                )}
+                {p.hd_lace === 1 && (
+                  <span className="bg-surface/90 backdrop-blur text-on-surface border border-outline-variant/40 px-3 py-1 text-xs font-bold uppercase tracking-widest">
+                    HD Lace
+                  </span>
+                )}
+                {p.pret_a_porter === 1 && (
+                  <span className="bg-surface/90 backdrop-blur text-on-surface border border-outline-variant/40 px-3 py-1 text-xs font-bold uppercase tracking-widest">
+                    Prêt à porter
+                  </span>
+                )}
+              </div>
+
+              {/* Compteur médias + invite au zoom */}
+              {activeItem?.type === "image" && (
+                <div className="absolute bottom-4 right-4 flex items-center gap-2 pointer-events-none">
+                  {media.length > 1 && (
+                    <span className="bg-black/50 text-white text-xs font-mono px-2 py-0.5">
+                      {activeIdx + 1} / {media.length}
+                    </span>
+                  )}
+                  <span className="hidden md:flex items-center gap-1 bg-black/50 text-white text-[11px] uppercase tracking-widest px-2 py-1 opacity-100 group-hover:opacity-0 transition-opacity">
+                    <span className="material-symbols-outlined text-sm">zoom_in</span>
+                    Survoler
+                  </span>
+                </div>
+              )}
+
+              {/* Wishlist */}
+              <button
+                onClick={toggleWishlist}
+                aria-label={wishlist ? "Retirer des favoris" : "Ajouter aux favoris"}
+                title={wishlistLoaded ? (wishlist ? "Retirer des favoris" : "Ajouter aux favoris") : "Chargement…"}
+                className="absolute top-4 right-4 w-9 h-9 bg-surface/90 backdrop-blur flex items-center justify-center hover:bg-surface transition-colors z-10">
+                <span className={`material-symbols-outlined text-xl ${wishlist ? "text-error" : "text-on-surface-variant"}`}
+                  style={{ fontVariationSettings: wishlist ? "'FILL' 1" : "'FILL' 0" }}>
+                  favorite
+                </span>
+              </button>
+            </div>
+
+            {/* Miniatures horizontales — écrans étroits, où le rail vertical mangerait la photo */}
+            {media.length > 1 && (
+              <div className="flex sm:hidden gap-2 overflow-x-auto pb-1">
+                {media.map((item, i) => (
+                  <MediaThumb key={i} item={item} active={activeIdx === i} onSelect={() => selectMedia(i)} />
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* ── Infos produit ── */}
@@ -570,7 +593,7 @@ export default function FicheProduit() {
             })()}
 
             <div className="flex items-start justify-between gap-2">
-              <h1 className="font-serif text-3xl md:text-4xl text-on-surface leading-tight mb-3">{p.name}</h1>
+              <h1 className="font-serif text-on-surface text-[2.5rem] md:text-5xl xl:text-6xl leading-[1.02] tracking-[-0.02em] mb-3">{p.name}</h1>
               {/* Bouton partager */}
               <button onClick={handleShare} title={copyDone ? "Lien copié !" : "Partager ce produit"}
                 className="shrink-0 mt-1 w-9 h-9 flex items-center justify-center border border-outline-variant text-on-surface-variant hover:text-primary hover:border-primary transition-colors">
@@ -972,16 +995,33 @@ export default function FicheProduit() {
       {/* ── Produits similaires ── */}
       {related.length > 0 && (
         <section>
-          <div className="flex items-end justify-between mb-8">
-            <h2 className="font-serif text-2xl md:text-3xl text-on-surface">Vous aimerez aussi</h2>
+          <div className="ddm-rule mb-8" />
+          <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-10">
+            <div>
+              <p className="ddm-eyebrow mb-4">Dans le même esprit</p>
+              <h2 className="font-serif text-on-surface text-4xl md:text-5xl leading-[0.95] tracking-[-0.02em]">
+                <span className="block">Vous aimerez</span>
+                <span className="block italic text-primary">aussi</span>
+              </h2>
+            </div>
             <Link to={`/boutique${p.famille ? `?famille=${p.famille}` : ""}`}
-              className="font-sans text-sm text-primary font-semibold hover:underline hidden md:flex items-center gap-1">
+              className="shrink-0 hidden md:inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-wider text-on-surface border-b-2 border-primary pb-1 hover:text-primary transition-colors">
               Voir tout
-              <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              <span className="material-symbols-outlined text-base">arrow_forward</span>
             </Link>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 gap-y-8">
-            {related.map(r => <RelatedCard key={r.id} product={r} />)}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-x-4 md:gap-x-6 gap-y-10">
+            {related.map((r, i) => (
+              <ProductTile
+                key={r.id}
+                product={r}
+                folio={i + 1}
+                spec={[
+                  r.texture ? (TEXTURE_SHORT[r.texture] ?? r.texture) : null,
+                  r.longueur_po ? `${r.longueur_po} po` : null,
+                ].filter(Boolean).join(" · ")}
+              />
+            ))}
           </div>
         </section>
       )}
@@ -1000,11 +1040,8 @@ function StarPicker({ value, onChange }: { value: number; onChange: (v: number) 
           onMouseEnter={() => setHover(s)} onMouseLeave={() => setHover(0)}
           onClick={() => onChange(s)}
           className="text-2xl transition-colors">
-          <span className="material-symbols-outlined text-2xl"
-            style={{
-              color: s <= (hover || value) ? "var(--color-primary)" : "var(--color-outline-variant)",
-              fontVariationSettings: s <= (hover || value) ? "'FILL' 1" : "'FILL' 0",
-            }}>
+          <span className={`material-symbols-outlined text-2xl ${s <= (hover || value) ? "text-primary" : "text-outline-variant"}`}
+            style={{ fontVariationSettings: s <= (hover || value) ? "'FILL' 1" : "'FILL' 0" }}>
             star
           </span>
         </button>
@@ -1083,8 +1120,8 @@ function ReviewsSection({ productId, productSlug, reviews, stats, currentCustome
                 <p className="font-serif text-6xl text-primary font-bold leading-none">{stats.avg.toFixed(1)}</p>
                 <div className="flex justify-center mt-1 mb-1">
                   {[1,2,3,4,5].map(s => (
-                    <span key={s} className="material-symbols-outlined text-base"
-                      style={{ color: s <= Math.round(stats.avg) ? "var(--color-primary)" : "var(--color-outline-variant)", fontVariationSettings: "'FILL' 1" }}>
+                    <span key={s} className={`material-symbols-outlined text-base ${s <= Math.round(stats.avg) ? "text-primary" : "text-outline-variant"}`}
+                      style={{ fontVariationSettings: "'FILL' 1" }}>
                       star
                     </span>
                   ))}
@@ -1281,8 +1318,8 @@ function ReviewsSection({ productId, productSlug, reviews, stats, currentCustome
                     </div>
                     <div className="flex">
                       {[1,2,3,4,5].map(s => (
-                        <span key={s} className="material-symbols-outlined text-xs"
-                          style={{ color: s <= r.rating ? "var(--color-primary)" : "var(--color-outline-variant)", fontVariationSettings: "'FILL' 1" }}>
+                        <span key={s} className={`material-symbols-outlined text-xs ${s <= r.rating ? "text-primary" : "text-outline-variant"}`}
+                          style={{ fontVariationSettings: "'FILL' 1" }}>
                           star
                         </span>
                       ))}
@@ -1428,6 +1465,35 @@ function QASection({ productId, items }: { productId: number; items: QAItem[] })
 
 // ─── Sub-components ─────────────────────────────────────────────────────────
 
+function MediaThumb({ item, active, onSelect }: {
+  item: { type: "image" | "video"; url: string; thumbnail_url: string | null; alt_text: string | null };
+  active: boolean;
+  onSelect: () => void;
+}) {
+  const thumb = item.type === "image"
+    ? (cfImage(item.url, "thumbnail") ?? item.url)
+    : item.thumbnail_url;
+  return (
+    <button onClick={onSelect} aria-label={item.alt_text ?? "Voir ce média"}
+      className={`w-[4.5rem] sm:w-full aspect-[3/4] overflow-hidden shrink-0 border-2 transition-colors relative ${
+        active ? "border-primary" : "border-transparent hover:border-outline-variant"
+      }`}>
+      {thumb ? (
+        <img src={thumb} alt={item.alt_text ?? ""} loading="lazy" className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full bg-surface-container flex items-center justify-center">
+          <span className="material-symbols-outlined text-outline-variant text-2xl">smart_display</span>
+        </div>
+      )}
+      {item.type === "video" && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+          <span className="material-symbols-outlined text-white text-xl">play_circle</span>
+        </div>
+      )}
+    </button>
+  );
+}
+
 function SpecRow({ icon, label, value }: { icon: string; label: string; value: string }) {
   return (
     <div className="flex items-start gap-2">
@@ -1485,38 +1551,3 @@ const TEXTURE_SHORT: Record<string, string> = {
   "kinky-curly": "Kinky Curly", "bob": "Bob",
 };
 
-function RelatedCard({ product: p }: { product: Product }) {
-  const discount = p.compare_at_price_cad && p.compare_at_price_cad > p.price_cad
-    ? Math.round((1 - p.price_cad / p.compare_at_price_cad) * 100)
-    : null;
-  return (
-    <Link to={`/boutique/${p.slug}`} className="group block">
-      <div className="aspect-[3/4] bg-surface-container overflow-hidden relative mb-3">
-        {p.image_key ? (
-          <img src={cfImage(p.image_key, "card") ?? p.image_key} alt={p.name}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
-        ) : (
-          <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
-            <span className="material-symbols-outlined text-3xl text-outline-variant">styler</span>
-          </div>
-        )}
-        {discount && (
-          <span className="absolute top-2 left-2 bg-error text-on-error text-[10px] font-bold px-2 py-0.5 uppercase">
-            -{discount}%
-          </span>
-        )}
-      </div>
-      <p className="font-serif text-sm text-on-surface mb-1 leading-snug group-hover:text-primary transition-colors">{p.name}</p>
-      <div className="flex flex-wrap gap-1 mb-1.5">
-        {p.texture && <span className="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded-sm">{TEXTURE_SHORT[p.texture] ?? p.texture}</span>}
-        {(p.longueur_po ?? 0) > 0 && <span className="text-[10px] bg-surface-container-high text-on-surface-variant px-1.5 py-0.5 rounded-sm">{p.longueur_po} po</span>}
-      </div>
-      <div className="flex items-center gap-2">
-        <p className="font-sans text-sm font-bold text-primary">{p.price_cad.toFixed(2)} $ CAD</p>
-        {p.compare_at_price_cad && p.compare_at_price_cad > p.price_cad && (
-          <p className="font-sans text-xs text-on-surface-variant line-through">{p.compare_at_price_cad.toFixed(2)} $</p>
-        )}
-      </div>
-    </Link>
-  );
-}

@@ -2,7 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useState } from "react";
-import { getDB, getProducts } from "~/lib/db.server";
+import { getDB, getProducts, getSecondaryImages } from "~/lib/db.server";
 import type { Product } from "~/lib/db.server";
 import { cfImage } from "~/lib/images";
 import { DEMO_PRODUCTS } from "~/lib/demo-products";
@@ -80,6 +80,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
   let ratingMap: RatingMap = {};
   let collections: { id: number; name: string; slug: string }[] = [];
   let flashMap: Record<number, { price: number; ends_at: string }> = {};
+  let secondImageMap: Record<number, string> = {};
   let filterCounts: {
     famille: Record<string, number>;
     texture: Record<string, number>;
@@ -100,6 +101,8 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       sort: p("tri") || undefined,
     });
 
+    secondImageMap = await getSecondaryImages(db, products);
+
     // Notes moyennes groupées par produit
     const ids = products.map(pr => pr.id).filter(id => id > 0);
     if (ids.length > 0) {
@@ -112,6 +115,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
       } catch {
         // table reviews pas encore créée
       }
+
     }
 
     try {
@@ -162,6 +166,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     ratingMap,
     collections,
     flashMap,
+    secondImageMap,
     filterCounts,
     filters: {
       famille: p("famille"), texture: p("texture"), lace: p("lace"),
@@ -174,44 +179,93 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 // ─── Page ──────────────────────────────────────────────────────────────────
 
 export default function Boutique() {
-  const { products: dbProducts, ratingMap, filters, collections, flashMap, filterCounts } = useLoaderData<typeof loader>();
+  const { products: dbProducts, ratingMap, filters, collections, flashMap, filterCounts, secondImageMap } = useLoaderData<typeof loader>();
   const products = dbProducts.length > 0 ? dbProducts : STATIC;
   const activeCount = Object.values(filters).filter(v => v !== "" && v !== "popularite").length;
   const [modalProduct, setModalProduct] = useState<Product | null>(null);
+
+  // Rythme éditorial. La fiche d'ouverture occupe deux colonnes, mais uniquement
+  // sur la collection complète : sur un résultat filtré le nombre de fiches est
+  // imprévisible et la rangée finirait trouée.
+  const heroIndex = activeCount === 0 && products.length >= 3 ? 0 : -1;
+
+  // L'encart quiz est posé entre deux grilles complètes plutôt qu'en col-span-full :
+  // une cellule pleine largeur au milieu d'une rangée laisserait des trous, et le
+  // nombre de colonnes change à chaque palier (2 / 3 / 4).
+  //
+  // La première grille doit se refermer sur une rangée pleine, sinon une fiche
+  // orpheline traîne juste au-dessus de l'encart. 12 cellules tombent juste à
+  // 2, 3 comme 4 colonnes — la fiche d'ouverture en occupant deux, on compte 11
+  // produits quand elle est là.
+  const cellsBeforeSplit = 12;
+  const idealSplit = heroIndex === 0 ? cellsBeforeSplit - 1 : cellsBeforeSplit;
+  const splitAt = products.length >= idealSplit + 3 ? idealSplit : products.length;
+  const head = products.slice(0, splitAt);
+  const tail = products.slice(splitAt);
+
+  const renderGrid = (items: Product[], offset: number) => (
+    <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-4 md:gap-x-6 gap-y-10 md:gap-y-14">
+      {items.map((p, i) => (
+        <ProductCard
+          key={p.id || offset + i}
+          product={p}
+          folio={offset + i + 1}
+          rating={ratingMap[p.id]}
+          flash={flashMap[p.id]}
+          secondImage={secondImageMap[p.id]}
+          wide={offset + i === heroIndex}
+          onQuickView={() => setModalProduct(p)}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <>
       <main className="max-w-[90rem] mx-auto px-6 md:px-10 lg:px-20 py-12">
 
-        {/* Hero */}
-        <header className="mb-10 md:mb-14">
-          <p className="font-sans text-xs font-bold tracking-[0.2em] uppercase text-primary mb-3">DDM Wigs & More</p>
-          <h1 className="font-serif text-4xl md:text-5xl text-on-surface mb-4 leading-tight">La Collection</h1>
-          <p className="font-sans text-base text-on-surface-variant max-w-2xl leading-relaxed">
-            Perruques en cheveux humains 100 % — sélectionnées pour leur qualité, leur naturel et leur durabilité.
-            Disponibles à Montréal avec livraison rapide.
-          </p>
-          <Link to="/quiz"
-            className="inline-flex items-center gap-1.5 mt-4 text-sm text-primary hover:underline underline-offset-4 font-semibold">
-            <span className="material-symbols-outlined text-base">auto_awesome</span>
-            Tu ne sais pas quoi choisir ? Fais le quiz →
-          </Link>
+        {/* Masthead éditorial */}
+        <header className="mb-12 md:mb-16">
+          <div className="ddm-rule mb-7" />
+
+          <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-8 lg:gap-16">
+            <div className="min-w-0">
+              <p className="ddm-eyebrow mb-4">DDM Wigs &amp; More — Montréal</p>
+              <h1 className="font-serif text-on-surface leading-[0.92] tracking-[-0.02em] text-[3.25rem] sm:text-7xl xl:text-[6.5rem]">
+                <span className="block">La</span>
+                <span className="block italic text-primary">Collection</span>
+              </h1>
+            </div>
+
+            <div className="lg:max-w-xs shrink-0 lg:pb-3">
+              <p className="font-sans text-[15px] text-on-surface-variant leading-relaxed">
+                Cheveux humains 100 %. Sélectionnées une à une pour leur naturel,
+                leur tenue et leur durabilité — livrées depuis Montréal.
+              </p>
+              <Link to="/quiz"
+                className="inline-flex items-center gap-2 mt-5 font-sans text-sm font-bold uppercase tracking-wider text-on-surface border-b-2 border-primary pb-1 hover:text-primary transition-colors">
+                <span className="material-symbols-outlined text-base">auto_awesome</span>
+                Trouver la vôtre
+              </Link>
+            </div>
+          </div>
 
           {/* Chips collections */}
           {collections.length > 0 && (
-            <div className="flex flex-wrap gap-2 mt-6">
+            <div className="flex flex-wrap gap-2 mt-10">
               {collections.map(col => (
                 <Link
                   key={col.id}
                   to={`/collections/${col.slug}`}
-                  className="inline-flex items-center gap-1.5 px-4 py-1.5 border border-outline-variant text-sm font-semibold text-on-surface-variant hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors rounded-full"
+                  className="inline-flex items-center px-4 py-1.5 border border-outline-variant font-sans text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary hover:bg-primary/5 transition-colors"
                 >
-                  <span className="material-symbols-outlined text-sm leading-none">collections_bookmark</span>
                   {col.name}
                 </Link>
               ))}
             </div>
           )}
+
+          <div className="ddm-rule mt-10" />
         </header>
 
         <div className="flex flex-col lg:flex-row gap-10">
@@ -338,17 +392,15 @@ export default function Boutique() {
             )}
 
             {products.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-x-6 gap-y-12">
-                {products.map((p, i) => (
-                  <ProductCard
-                    key={p.id || i}
-                    product={p}
-                    rating={ratingMap[p.id]}
-                    flash={flashMap[p.id]}
-                    onQuickView={() => setModalProduct(p)}
-                  />
-                ))}
-              </div>
+              <>
+                {renderGrid(head, 0)}
+                {tail.length > 0 && (
+                  <>
+                    <QuizInterstitial />
+                    {renderGrid(tail, head.length)}
+                  </>
+                )}
+              </>
             ) : (
               <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
                 <span className="material-symbols-outlined text-5xl text-outline-variant">search_off</span>
@@ -376,8 +428,8 @@ export default function Boutique() {
               </Link>
             </div>
             <div className="flex-1 aspect-video w-full overflow-hidden">
-              <img alt="Entretien perruque" className="w-full h-full object-cover"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDJmaN6XSo60HjaEDBEe2d-Upy1tEFbjQyY0fVADNQr8ll4ONjXhE7woXgGVWqFyNDFKSqH74X_gs9YbvsMrLcc2CBSHBqPepdSN-GFU-4tQhm-g5y8n0XJqcFemk_yQIAwMNS8KIBIC3ZD-l9prK6i0x0P1ngfPG8WknfdYbgOIm8-Tv2GRNb5VjzGnZYCIImt4Sdn8pRodGe4u6wcrmyB8woacBfzUgbEJ7LVmjQWa6vhz4FMfkPKpdv6eleY1Fz7BbINOL8ZZho" />
+              <img alt="Chevelure humide perlée de gouttelettes après un soin" className="w-full h-full object-cover"
+                src="/images/textures/entretien.jpg" />
             </div>
           </div>
         </section>
@@ -699,15 +751,45 @@ function FlashCountdown({ endsAt }: { endsAt: string }) {
   );
 }
 
+function QuizInterstitial() {
+  return (
+    <section className="my-14 md:my-20 bg-on-surface text-white px-8 py-12 md:px-14 md:py-16 flex flex-col md:flex-row md:items-end gap-8 md:gap-12">
+      <div className="min-w-0 flex-1">
+        <p className="font-sans text-[11px] font-bold uppercase tracking-[0.25em] text-primary-fixed mb-4">
+          Conseil personnalisé
+        </p>
+        <p className="font-serif text-3xl md:text-5xl leading-[1.05] tracking-[-0.01em]">
+          <span className="block">Cinq questions,</span>
+          <span className="block italic text-primary-fixed">et on trouve la vôtre.</span>
+        </p>
+      </div>
+      <div className="shrink-0">
+        <Link to="/quiz"
+          className="inline-flex items-center gap-2 bg-white text-on-surface px-8 py-4 font-sans text-sm font-bold uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors">
+          <span className="material-symbols-outlined text-lg">auto_awesome</span>
+          Faire le quiz
+        </Link>
+        <p className="font-sans text-[11px] text-white/40 mt-3">2 minutes · gratuit · sans compte</p>
+      </div>
+    </section>
+  );
+}
+
 function ProductCard({
   product: p,
   rating,
   flash,
+  folio,
+  secondImage,
+  wide,
   onQuickView,
 }: {
   product: Product;
   rating?: { avg: number; count: number };
   flash?: { price: number; ends_at: string };
+  folio: number;
+  secondImage?: string;
+  wide?: boolean;
   onQuickView: () => void;
 }) {
   const displayPrice = flash ? flash.price : p.price_cad;
@@ -716,36 +798,52 @@ function ProductCard({
     ? Math.round((1 - displayPrice / originalPrice) * 100)
     : null;
 
-  const cardInner = (
-    <>
-      {/* Image */}
-      <div className="aspect-[4/5] overflow-hidden bg-surface-container relative mb-4">
+  // Second visuel au survol quand la fiche en a un ; sinon on retombe sur le zoom.
+  // Cumuler les deux rend le survol illisible.
+  const swapSrc = secondImage ? (cfImage(secondImage, "card") ?? secondImage) : null;
+
+  return (
+    <div className={`group relative ${wide ? "sm:col-span-2" : ""}`}>
+
+      {/* Visuel */}
+      <div className={`relative overflow-hidden bg-surface-container mb-4 ${wide ? "aspect-[3/4] sm:aspect-[16/10]" : "aspect-[3/4]"}`}>
         {p.image_key ? (
-          <img alt={p.name} src={cfImage(p.image_key, "card") ?? p.image_key}
-            className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
+          <>
+            {swapSrc && (
+              <img alt="" aria-hidden="true" loading="lazy" src={swapSrc}
+                className="absolute inset-0 w-full h-full object-cover" />
+            )}
+            {/* Les fiches de la première rangée sont chargées sans délai : ce sont
+                elles qui portent le LCP de la page. */}
+            <img alt={p.name} loading={folio <= 4 ? "eager" : "lazy"}
+              src={cfImage(p.image_key, "card") ?? p.image_key}
+              className={`absolute inset-0 w-full h-full object-cover ${swapSrc ? "ddm-swap-front" : "ddm-zoom"}`} />
+          </>
         ) : (
           <div className="w-full h-full bg-surface-container-high flex items-center justify-center">
             <span className="material-symbols-outlined text-4xl text-outline-variant">styler</span>
           </div>
         )}
 
-        {/* Badges */}
-        <div className="absolute top-3 left-3 flex flex-col gap-1.5">
-          {flash && (
-            <span className="inline-flex items-center gap-1 bg-error text-on-error text-[11px] font-bold px-2 py-0.5 rounded-sm">
-              <span className="material-symbols-outlined text-xs leading-none" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-              Vente Flash -{discount}%
-            </span>
-          )}
-          {!flash && discount && <PBadge sale>-{discount}%</PBadge>}
-          {p.featured === 1 && !discount && !flash && <PBadge>Vedette</PBadge>}
-          {p.hd_lace === 1 && <PBadge subtle>HD Lace</PBadge>}
-          {p.pret_a_porter === 1 && <PBadge subtle>Prêt à porter</PBadge>}
-          {p.glueless === 1 && p.pret_a_porter !== 1 && <PBadge subtle>Sans colle</PBadge>}
+        {/* Badges — plafonnés à trois : au-delà, la pile mange la photo */}
+        <div className="absolute top-3 left-3 flex flex-col items-start gap-1.5">
+          {[
+            flash ? (
+              <span key="flash" className="inline-flex items-center gap-1 bg-error text-on-error text-[10px] font-bold uppercase tracking-widest px-2 py-0.5">
+                <span className="material-symbols-outlined text-xs leading-none" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+                Flash −{discount}%
+              </span>
+            ) : null,
+            !flash && discount ? <PBadge key="promo" sale>−{discount}%</PBadge> : null,
+            p.featured === 1 && !discount && !flash ? <PBadge key="vedette">Sélection</PBadge> : null,
+            p.hd_lace === 1 ? <PBadge key="hd" subtle>HD Lace</PBadge> : null,
+            p.pret_a_porter === 1 ? <PBadge key="pret" subtle>Prêt à porter</PBadge> : null,
+            p.glueless === 1 && p.pret_a_porter !== 1 ? <PBadge key="colle" subtle>Sans colle</PBadge> : null,
+          ].filter(Boolean).slice(0, 3)}
         </div>
 
-        {/* Bouton Aperçu rapide — visible au hover */}
-        <div className="absolute inset-x-3 bottom-3 flex gap-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-300">
+        {/* Actions au survol — z-20 pour passer au-dessus du lien plein-carte */}
+        <div className="absolute inset-x-3 bottom-3 z-20 flex gap-2 opacity-0 translate-y-2 group-hover:opacity-100 group-hover:translate-y-0 group-focus-within:opacity-100 group-focus-within:translate-y-0 transition-all duration-300">
           <div className="flex-1 bg-on-surface text-surface py-2.5 text-center font-sans text-[11px] font-bold uppercase tracking-widest">
             {p.slug ? "Voir le produit" : "Bientôt disponible"}
           </div>
@@ -753,6 +851,7 @@ function ProductCard({
             <button
               onClick={e => { e.preventDefault(); e.stopPropagation(); onQuickView(); }}
               title="Aperçu rapide"
+              aria-label={`Aperçu rapide — ${p.name}`}
               className="w-10 bg-surface text-on-surface flex items-center justify-center hover:bg-primary hover:text-on-primary transition-colors shrink-0">
               <span className="material-symbols-outlined text-base">visibility</span>
             </button>
@@ -760,64 +859,74 @@ function ProductCard({
         </div>
       </div>
 
-      {/* Infos */}
-      <div>
-        <h2 className="font-serif text-lg text-on-surface mb-1 leading-snug">{p.name}</h2>
-
-        {/* Étoiles */}
-        <div className="flex items-center gap-1.5 mb-2">
-          <div className="flex">
-            {[1,2,3,4,5].map(s => (
-              <span key={s} className="material-symbols-outlined text-sm"
-                style={{
-                  color: rating && s <= Math.round(rating.avg) ? "var(--color-primary)" : "var(--color-outline-variant)",
-                  fontVariationSettings: rating && s <= Math.round(rating.avg) ? "'FILL' 1" : "'FILL' 0",
-                }}>
-                star
-              </span>
-            ))}
-          </div>
-          {rating ? (
-            <span className="font-sans text-[11px] text-on-surface-variant">({rating.count})</span>
-          ) : (
-            <span className="font-sans text-[11px] text-on-surface-variant/50">Nouveau</span>
-          )}
-        </div>
-
-        {/* Chips */}
-        <div className="flex flex-wrap gap-1.5 mb-2">
-          {p.texture && <Chip>{TEXTURE_LABELS[p.texture] ?? p.texture}</Chip>}
-          {p.type_lace && <Chip>{LACE_LABELS[p.type_lace] ?? p.type_lace}</Chip>}
-          {p.longueur_po && <Chip>{p.longueur_po} po</Chip>}
-          {p.densite && <Chip>{p.densite}%</Chip>}
-        </div>
-
-        <div className="flex items-center justify-between mt-1 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <p className={`font-sans text-base font-bold ${flash ? "text-error" : "text-primary"}`}>
-              {displayPrice.toFixed(2)} $ CAD
-            </p>
-            {originalPrice && originalPrice > displayPrice && (
-              <p className="font-sans text-sm text-on-surface-variant line-through">{originalPrice.toFixed(2)} $</p>
-            )}
-          </div>
-          {p.stock > 0 && p.stock <= 2 && (
-            <p className="font-sans text-xs text-error font-semibold">Plus que {p.stock} !</p>
-          )}
-        </div>
-        {flash && (
-          <div className="flex items-center gap-1 mt-1.5 text-error">
-            <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>timer</span>
-            <FlashCountdown endsAt={flash.ends_at} />
-          </div>
+      {/* Folio éditorial */}
+      <div className="flex items-center gap-3 mb-2">
+        <span className="ddm-folio">{String(folio).padStart(2, "0")}</span>
+        <span className="h-px flex-1 bg-outline-variant/50" />
+        {p.stock > 0 && p.stock <= 2 && (
+          <span className="font-sans text-[10px] font-bold uppercase tracking-widest text-error">Plus que {p.stock}</span>
         )}
       </div>
-    </>
-  );
 
-  return p.slug
-    ? <Link to={`/boutique/${p.slug}`} className="group block">{cardInner}</Link>
-    : <div className="group">{cardInner}</div>;
+      <h2 className={`font-serif text-on-surface leading-snug mb-2 ${
+        wide ? "text-lg sm:text-2xl md:text-3xl min-h-[2.75em] sm:min-h-0" : "text-lg min-h-[2.75em]"
+      }`}>
+        {p.name}
+      </h2>
+
+      {/* Étoiles */}
+      <div className="flex items-center gap-1.5 mb-2">
+        <div className="flex">
+          {[1,2,3,4,5].map(s => (
+            <span key={s}
+              className={`material-symbols-outlined text-sm ${rating && s <= Math.round(rating.avg) ? "text-primary" : "text-outline-variant"}`}
+              style={{ fontVariationSettings: rating && s <= Math.round(rating.avg) ? "'FILL' 1" : "'FILL' 0" }}>
+              star
+            </span>
+          ))}
+        </div>
+        {rating ? (
+          <span className="font-sans text-[11px] text-on-surface-variant">({rating.count})</span>
+        ) : (
+          <span className="font-sans text-[11px] text-on-surface-variant/50">Nouveau</span>
+        )}
+      </div>
+
+      {/* Chips — masquées sur mobile, la carte y fait une demi-largeur */}
+      <div className="hidden sm:flex flex-wrap gap-1.5 mb-2.5">
+        {p.texture && <Chip>{TEXTURE_LABELS[p.texture] ?? p.texture}</Chip>}
+        {p.type_lace && <Chip>{LACE_LABELS[p.type_lace] ?? p.type_lace}</Chip>}
+        {p.longueur_po && <Chip>{p.longueur_po} po</Chip>}
+        {p.densite && <Chip>{p.densite}%</Chip>}
+      </div>
+
+      {/* Prix */}
+      <div className="flex items-baseline gap-2.5 flex-wrap">
+        <p className={`font-serif text-xl font-bold ${flash ? "text-error" : "text-primary"}`}>
+          {displayPrice.toFixed(2)}{" "}
+          <span className="font-sans text-[11px] font-bold text-on-surface-variant">$ CAD</span>
+        </p>
+        {originalPrice && originalPrice > displayPrice && (
+          <p className="font-sans text-sm text-on-surface-variant line-through">{originalPrice.toFixed(2)} $</p>
+        )}
+      </div>
+
+      {flash && (
+        <div className="flex items-center gap-1 mt-1.5 text-error">
+          <span className="material-symbols-outlined text-xs" style={{ fontVariationSettings: "'FILL' 1" }}>timer</span>
+          <FlashCountdown endsAt={flash.ends_at} />
+        </div>
+      )}
+
+      {/* Lien plein-carte. Posé en dernier plutôt qu'en <Link> englobant :
+          le bouton d'aperçu rapide ne peut pas être imbriqué dans un <a>. */}
+      {p.slug && (
+        <Link to={`/boutique/${p.slug}`} className="absolute inset-0 z-10">
+          <span className="sr-only">{p.name}</span>
+        </Link>
+      )}
+    </div>
+  );
 }
 
 // ─── UI atoms ───────────────────────────────────────────────────────────────
@@ -837,7 +946,7 @@ function PBadge({ children, subtle, sale }: { children: React.ReactNode; subtle?
 
 function Chip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="px-2 py-0.5 text-[11px] font-medium bg-surface-container-high text-on-surface-variant rounded-sm">
+    <span className="px-2 py-0.5 text-[11px] font-medium border border-outline-variant/70 text-on-surface-variant">
       {children}
     </span>
   );

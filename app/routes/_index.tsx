@@ -3,13 +3,14 @@ import { json } from "@remix-run/cloudflare";
 import { useLoaderData, Link } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { cfImage } from "~/lib/images";
-import { getDB, getProducts } from "~/lib/db.server";
+import { getDB, getProducts, getSecondaryImages } from "~/lib/db.server";
+import { ProductTile } from "~/components/ProductTile";
 import type { Product } from "~/lib/db.server";
 
 const BASE = "https://ddmwigs.com";
 const SITE_DESC = "Perruques en cheveux humains 100% — Lace front, HD lace, glueless. Livraison rapide au Canada. DDM Wigs & More, Montréal.";
 // Image du hero — utilisée pour les partages sociaux (og:image)
-const OG_IMAGE = "https://lh3.googleusercontent.com/aida/AP1WRLvgOP7GaYVKdb8rCQb9YTruiab11rrps-I_BpwRBuPJ0WmDOm6aXcAzsPkEdc3Y_iEylSp3ZhwRrzSAz0RZXCx_TS9g5y0SyW1xruxzOuH_zxvKZkqyObh0wQnCpZUBLOoHBv5PhFUuMgN-Gt3itdtP6Jr0RVz92GKuzKy6UmiVrascDDNHQHGZs2MLEdopMCXF7MmFlJalhMC5CNLP7HnKvqbof6uzcBEDkFJ1Gf6ASM-Z08JzxBlu-3Y";
+const OG_IMAGE = "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU";
 
 export const meta: MetaFunction = () => [
   { title: "DDM Wigs & More | Perruques Cheveux Humains — Montréal" },
@@ -73,7 +74,9 @@ export async function loader({ context }: LoaderFunctionArgs) {
     flashProducts = results ?? [];
   } catch { /* table pas encore créée */ }
 
-  return json({ featuredProducts, flashProducts });
+  const secondImageMap = await getSecondaryImages(db, featuredProducts);
+
+  return json({ featuredProducts, flashProducts, secondImageMap });
 }
 
 function useFlashCountdown(endsAt: string) {
@@ -113,23 +116,15 @@ function FlashTimer({ endsAt }: { endsAt: string }) {
 }
 
 export default function Index() {
-  const { featuredProducts, flashProducts } = useLoaderData<typeof loader>();
+  const { featuredProducts, flashProducts, secondImageMap } = useLoaderData<typeof loader>();
 
-  useEffect(() => {
-    const nav = document.querySelector("nav");
-    if (!nav) return;
-    const handleScroll = () => {
-      if (window.scrollY > 50) {
-        nav.classList.add("h-16");
-        nav.classList.remove("h-20");
-      } else {
-        nav.classList.add("h-20");
-        nav.classList.remove("h-16");
-      }
-    };
-    window.addEventListener("scroll", handleScroll);
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, []);
+  // La grille des vedettes est en 2 ou 4 colonnes selon l'écran : on s'arrête à un
+  // multiple de 4 pour que la vitrine se referme sur une rangée pleine aux deux
+  // paliers. Au-delà de huit, c'est le lien « toute la collection » qui prend le
+  // relais — l'accueil est une sélection, pas le catalogue.
+  const vedettes = featuredProducts.length >= 8
+    ? featuredProducts.slice(0, 8)
+    : featuredProducts.slice(0, featuredProducts.length >= 4 ? 4 : featuredProducts.length);
 
   const websiteLd = {
     "@context": "https://schema.org",
@@ -160,100 +155,104 @@ export default function Index() {
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgLd) }} />
       <HeroCarousel />
 
-      {/* Garantie Pour Vous */}
-      <section className="bg-surface-container-low border-b border-outline-variant/30">
-        <div className="max-w-container-max-width mx-auto px-grid-margin-desktop py-12">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="flex items-center gap-4">
-              <span className="material-symbols-outlined text-primary text-3xl">assignment_return</span>
-              <div>
-                <h4 className="font-label-md text-sm text-on-surface">14 Jours Retour</h4>
-                <p className="text-[12px] text-on-surface-variant">Satisfaction garantie</p>
+      {/* Garanties — bandeau de réassurance */}
+      <section className="bg-surface-container-low border-b border-outline-variant/40">
+        <div className="max-w-container-max-width mx-auto px-grid-margin-desktop">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-y-2 md:gap-0">
+            {[
+              { icon: "assignment_return", label: "14 jours retour", sub: "Satisfaction garantie" },
+              { icon: "local_shipping",    label: "Livraison gratuite", sub: "Partout au Canada" },
+              { icon: "schedule",          label: "Expédition 72 h", sub: "Rapide et suivie" },
+              { icon: "verified",          label: "100 % vrais cheveux", sub: "Qualité premium certifiée" },
+            ].map(({ icon, label, sub }, i) => (
+              <div key={label}
+                className={`flex items-start gap-3 py-6 md:py-10 md:px-8 ${i > 0 ? "md:border-l md:border-outline-variant/40" : ""}`}>
+                <span className="material-symbols-outlined text-primary text-xl leading-none mt-0.5">{icon}</span>
+                <div className="min-w-0">
+                  <p className="font-sans text-[11px] font-bold uppercase tracking-[0.15em] text-on-surface">{label}</p>
+                  <p className="font-sans text-xs text-on-surface-variant mt-1.5">{sub}</p>
+                </div>
               </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="material-symbols-outlined text-primary text-3xl">local_shipping</span>
-              <div>
-                <h4 className="font-label-md text-sm text-on-surface">Livraison Gratuite</h4>
-                <p className="text-[12px] text-on-surface-variant">Sur toutes les commandes</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="material-symbols-outlined text-primary text-3xl">schedule</span>
-              <div>
-                <h4 className="font-label-md text-sm text-on-surface">Expédition en 72 Hrs</h4>
-                <p className="text-[12px] text-on-surface-variant">Rapide et sécurisée</p>
-              </div>
-            </div>
-            <div className="flex items-center gap-4">
-              <span className="material-symbols-outlined text-primary text-3xl">verified</span>
-              <div>
-                <h4 className="font-label-md text-sm text-on-surface">100% Vrais Cheveux</h4>
-                <p className="text-[12px] text-on-surface-variant">Qualité premium certifiée</p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* Quiz CTA */}
+      {/* Quiz — même bandeau que celui posé au milieu de la grille boutique */}
       <section className="max-w-container-max-width mx-auto px-grid-margin-desktop mt-section-gap-desktop">
-        <div className="relative overflow-hidden bg-on-surface px-8 md:px-14 py-12 flex flex-col md:flex-row items-center gap-8">
-          <div className="relative flex-1 text-center md:text-left">
-            <p className="font-sans text-[11px] font-bold text-primary-container uppercase tracking-[0.2em] mb-3">
-              Personnalisé pour toi
+        <div className="bg-on-surface text-white px-8 py-12 md:px-14 md:py-16 flex flex-col md:flex-row md:items-end gap-8 md:gap-12">
+          <div className="min-w-0 flex-1">
+            <p className="font-sans text-[11px] font-bold uppercase tracking-[0.25em] text-primary-fixed mb-4">
+              Conseil personnalisé
             </p>
-            <h2 className="font-serif text-2xl md:text-3xl text-white mb-3 leading-tight">
-              Tu ne sais pas quelle perruque choisir ?
-            </h2>
-            <p className="font-sans text-sm text-white/60 max-w-md">
-              Réponds à 5 questions et on te recommande les perruques parfaites pour ton style, ton budget et ton niveau.
+            <p className="font-serif text-3xl md:text-5xl leading-[1.05] tracking-[-0.01em]">
+              <span className="block">Cinq questions,</span>
+              <span className="block italic text-primary-fixed">et on trouve la vôtre.</span>
             </p>
           </div>
-          <div className="relative flex-shrink-0 text-center">
+          <div className="shrink-0">
             <Link to="/quiz"
-              className="flex items-center gap-2 bg-primary text-on-primary px-8 py-4 text-sm font-bold uppercase tracking-widest hover:opacity-90 transition-opacity">
+              className="inline-flex items-center gap-2 bg-white text-on-surface px-8 py-4 font-sans text-sm font-bold uppercase tracking-widest hover:bg-primary hover:text-on-primary transition-colors">
               <span className="material-symbols-outlined text-lg">auto_awesome</span>
-              Trouver ma perruque
+              Faire le quiz
             </Link>
-            <p className="text-white/30 text-[11px] mt-2">2 minutes · Gratuit · Sans compte</p>
+            <p className="font-sans text-[11px] text-white/40 mt-3">2 minutes · gratuit · sans compte</p>
           </div>
         </div>
       </section>
 
-      {/* Boutique Shortcut */}
+      {/* Raccourcis boutique */}
       <section className="max-w-container-max-width mx-auto px-grid-margin-desktop mt-section-gap-desktop">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-grid-gutter h-auto md:h-[500px]">
-          <div className="relative group overflow-hidden rounded-sm cursor-pointer">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-grid-gutter">
+
+          {/* Le visuel n'est plus désaturé : sur une perruque, la couleur est
+              justement l'argument de vente. */}
+          <Link to="/boutique" className="group relative block overflow-hidden aspect-[4/5] md:aspect-auto md:h-[540px]">
             <img
               alt="Nouveautés"
-              className="w-full h-full object-cover grayscale-[30%] group-hover:grayscale-0 transition-all duration-700"
+              className="absolute inset-0 w-full h-full object-cover ddm-zoom"
               src="https://lh3.googleusercontent.com/aida-public/AB6AXuCCbcyZDFlEUORFmblZANwAMfCUCqOkctvG5QFcBrCOQV-nphWsF7tS20ffky6c3CvWhH-MwY9lAhxG4Mx9WFX8sDrVXcRxEy99UbwX4cq2ZfAwB3nqFjDFd76bjPOIfVDVeb8jfNtg7SwYuyT7fGR0ZgYEnAAas-huxvkHdytFje67w2b8064LnqZJ1ymKw6DSATRGodGcXyxaSGqk1BkAxekXOFYgdtoVUSvdEGBMvuN8NHYVJJsLrvxsE9M66QripwgSxnmpoKs"
             />
-            <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors"></div>
-            <div className="absolute bottom-10 left-10 text-white">
-              <h3 className="font-headline-lg text-headline-lg mb-2">Les Nouveautés</h3>
-              <p className="font-body-md opacity-80 mb-4">Découvrez nos dernières créations automnales.</p>
-              <Link to="/boutique" className="font-label-md text-label-md border-b border-white pb-1">Explorer →</Link>
+            <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+            <div className="absolute inset-x-8 bottom-8 text-white">
+              <p className="font-sans text-[11px] font-bold uppercase tracking-[0.25em] text-primary-fixed mb-3">Arrivages</p>
+              <h3 className="font-serif text-4xl md:text-5xl leading-[0.95] tracking-[-0.02em] mb-4">
+                <span className="block">Les</span>
+                <span className="block italic">Nouveautés</span>
+              </h3>
+              <span className="inline-flex items-center gap-2 font-sans text-xs font-bold uppercase tracking-widest border-b border-white pb-1">
+                Explorer
+                <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </span>
             </div>
-          </div>
-          <div className="grid grid-rows-2 gap-grid-gutter">
-            <Link to="/boutique" className="bg-surface-container p-10 flex items-center justify-between group cursor-pointer hover:bg-primary-container/10 transition-colors">
-              <div className="space-y-2">
-                <span className="text-primary font-label-md text-xs uppercase">Populaire</span>
-                <h3 className="font-headline-md text-headline-md">Best Sellers</h3>
-                <p className="text-on-surface-variant text-sm">Les préférés de nos clientes.</p>
-              </div>
-              <div className="material-symbols-outlined text-4xl text-outline-variant group-hover:text-primary group-hover:translate-x-2 transition-all">trending_up</div>
-            </Link>
-            <Link to="/ventes-flash" className="bg-secondary-container/20 p-10 flex items-center justify-between group cursor-pointer hover:bg-secondary-container/40 transition-colors">
-              <div className="space-y-2">
-                <span className="text-secondary font-label-md text-xs uppercase">Promotion</span>
-                <h3 className="font-headline-md text-headline-md">Ventes Flash</h3>
-                <p className="text-on-surface-variant text-sm">Offres limitées dans le temps.</p>
-              </div>
-              <div className="material-symbols-outlined text-4xl text-outline-variant group-hover:text-secondary group-hover:translate-x-2 transition-all">bolt</div>
-            </Link>
+          </Link>
+
+          <div className="grid grid-rows-2 gap-grid-gutter md:h-[540px]">
+            {[
+              { to: "/boutique", folio: "01", eyebrow: "Populaire", title: "Best", accent: "Sellers",
+                sub: "Les préférés de nos clientes.", icon: "trending_up", bg: "bg-surface-container" },
+              { to: "/ventes-flash", folio: "02", eyebrow: "Promotion", title: "Ventes", accent: "Flash",
+                sub: "Offres limitées dans le temps.", icon: "bolt", bg: "bg-secondary-container/25" },
+            ].map(({ to, folio, eyebrow, title, accent, sub, icon, bg }) => (
+              <Link key={to} to={to}
+                className={`group flex items-end justify-between gap-6 p-8 md:p-10 ${bg} hover:bg-primary/10 transition-colors`}>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-3 mb-4">
+                    <span className="ddm-folio">{folio}</span>
+                    <span className="h-px w-10 bg-outline-variant/60" />
+                    <span className="font-sans text-[11px] font-bold uppercase tracking-[0.2em] text-primary">{eyebrow}</span>
+                  </div>
+                  <h3 className="font-serif text-3xl md:text-4xl leading-[0.95] tracking-[-0.02em] text-on-surface">
+                    <span className="block">{title}</span>
+                    <span className="block italic text-primary">{accent}</span>
+                  </h3>
+                  <p className="font-sans text-sm text-on-surface-variant mt-3">{sub}</p>
+                </div>
+                <span className="material-symbols-outlined text-4xl text-outline-variant group-hover:text-primary group-hover:translate-x-2 transition-all shrink-0">
+                  {icon}
+                </span>
+              </Link>
+            ))}
           </div>
         </div>
       </section>
@@ -263,17 +262,17 @@ export default function Index() {
         <section className="max-w-container-max-width mx-auto px-grid-margin-desktop mt-section-gap-desktop">
           <div className="bg-on-surface overflow-hidden">
             {/* En-tête */}
-            <div className="flex items-center justify-between px-6 md:px-10 py-5 border-b border-white/10">
-              <div className="flex items-center gap-3">
-                <span className="material-symbols-outlined text-error text-2xl" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-                <div>
-                  <h2 className="font-serif text-xl text-white">Ventes Flash</h2>
-                  <p className="font-sans text-xs text-white/50">Offres limitées dans le temps</p>
+            <div className="flex items-center justify-between gap-4 px-6 md:px-10 py-6 border-b border-white/10">
+              <div className="flex items-center gap-3 min-w-0">
+                <span className="material-symbols-outlined text-error text-2xl shrink-0" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+                <div className="min-w-0">
+                  <p className="font-sans text-[11px] font-bold uppercase tracking-[0.25em] text-error mb-1">Offres limitées</p>
+                  <h2 className="font-serif text-2xl md:text-3xl text-white leading-none">Ventes Flash</h2>
                 </div>
               </div>
               {flashProducts[0] && <FlashTimer endsAt={flashProducts[0].flash_ends_at} />}
               <Link to="/ventes-flash"
-                className="hidden md:flex items-center gap-1 font-sans text-xs font-bold text-error uppercase tracking-wider hover:text-error/80 transition-colors">
+                className="hidden md:flex items-center gap-1 font-sans text-xs font-bold text-error uppercase tracking-wider hover:text-error/80 transition-colors shrink-0">
                 Voir tout
                 <span className="material-symbols-outlined text-sm">arrow_forward</span>
               </Link>
@@ -284,28 +283,28 @@ export default function Index() {
                 const pct = Math.round((1 - p.flash_price / p.price_cad) * 100);
                 return (
                   <Link key={p.id} to={`/boutique/${p.slug}`} className="group bg-on-surface p-4 hover:bg-white/5 transition-colors">
-                    <div className="relative aspect-[4/5] overflow-hidden mb-3">
+                    <div className="relative aspect-[3/4] overflow-hidden mb-3">
                       {p.image_key ? (
-                        <img alt={p.name} src={cfImage(p.image_key, "card") ?? p.image_key}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                        <img alt={p.name} loading="lazy" src={cfImage(p.image_key, "card") ?? p.image_key}
+                          className="w-full h-full object-cover ddm-zoom" />
                       ) : (
                         <div className="w-full h-full bg-white/5 flex items-center justify-center">
                           <span className="material-symbols-outlined text-white/20 text-3xl">styler</span>
                         </div>
                       )}
-                      <span className="absolute top-2 left-2 bg-error text-on-error text-[10px] font-bold px-1.5 py-0.5 rounded-sm">-{pct}%</span>
+                      <span className="absolute top-2 left-2 bg-error text-on-error text-[10px] font-bold uppercase tracking-widest px-2 py-0.5">−{pct}%</span>
                     </div>
-                    <p className="font-sans text-xs text-white/60 truncate mb-0.5">{p.name}</p>
+                    <p className="font-serif text-sm text-white/90 truncate mb-1">{p.name}</p>
                     <div className="flex items-baseline gap-2">
-                      <span className="font-sans text-sm font-bold text-error">{p.flash_price.toFixed(2)} $</span>
+                      <span className="font-serif text-base font-bold text-error">{p.flash_price.toFixed(2)} $</span>
                       <span className="font-sans text-xs text-white/40 line-through">{p.price_cad.toFixed(2)} $</span>
                     </div>
                   </Link>
                 );
               })}
             </div>
-            {/* Footer mobile */}
-            <div className="md:hidden px-6 py-3 border-t border-white/10">
+            {/* Pied mobile */}
+            <div className="md:hidden px-6 py-4 border-t border-white/10">
               <Link to="/ventes-flash" className="flex items-center justify-center gap-1 font-sans text-xs font-bold text-error uppercase tracking-wider">
                 Voir toutes les ventes flash
                 <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -315,82 +314,121 @@ export default function Index() {
         </section>
       )}
 
-      {/* Featured Products (dynamic) */}
-      {featuredProducts.length > 0 && (
+      {/* Produits vedettes */}
+      {vedettes.length > 0 && (
         <section className="max-w-container-max-width mx-auto px-grid-margin-desktop mt-section-gap-desktop">
-          <div className="text-center mb-12">
-            <h2 className="font-headline-lg text-headline-lg text-on-surface">Produits Vedettes</h2>
-            <p className="text-on-surface-variant font-body-md mt-2">Nos pièces les plus prisées, sélectionnées pour vous.</p>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-grid-gutter">
-            {featuredProducts.map((product: Product) => (
-              <Link to={`/boutique/${product.slug}`} key={product.id} className="group cursor-pointer">
-                <div className="aspect-[4/5] overflow-hidden bg-surface-container relative mb-4">
-                  {product.image_key && (
-                    <img
-                      alt={product.name}
-                      className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
-                      src={cfImage(product.image_key, "card") ?? product.image_key}
-                    />
-                  )}
-                  <div className="absolute top-4 left-4">
-                    <span className="bg-primary text-on-primary px-3 py-1 font-label-md text-[10px] uppercase tracking-widest">Vedette</span>
-                  </div>
-                </div>
-                <h2 className="font-headline-md text-headline-md mb-1">{product.name}</h2>
-                <p className="font-body-md text-body-md text-on-surface-variant mb-2">{product.description}</p>
-                <p className="font-body-md text-body-md font-semibold text-primary">${product.price_cad.toFixed(2)} CAD</p>
-              </Link>
+          <SectionHead
+            eyebrow="Sélection de la maison"
+            title="Produits"
+            accent="Vedettes"
+            link={{ to: "/boutique", label: "Toute la collection" }}
+          />
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 md:gap-x-6 gap-y-10 md:gap-y-14">
+            {vedettes.map((product: Product, i: number) => (
+              <ProductTile
+                key={product.id}
+                product={product}
+                folio={i + 1}
+                secondImage={secondImageMap[product.id]}
+                eager={i < 4}
+                badge="Vedette"
+              />
             ))}
-          </div>
-          <div className="text-center mt-12">
-            <Link to="/boutique" className="px-10 py-4 border border-on-surface text-on-surface font-label-md text-label-md hover:bg-on-surface hover:text-white transition-all duration-300 inline-block">
-              Voir toute la collection
-            </Link>
           </div>
         </section>
       )}
 
-      {/* Featured Categories (Texture & Style) */}
+      {/* Textures */}
       <section className="max-w-container-max-width mx-auto px-grid-margin-desktop mt-section-gap-desktop">
-        <div className="text-center mb-12">
-          <h2 className="font-headline-lg text-headline-lg text-on-surface">Choisir par Texture</h2>
-          <p className="text-on-surface-variant font-body-md mt-2">Trouvez le style qui correspond à votre nature.</p>
-        </div>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-grid-gutter">
+        <SectionHead
+          eyebrow="Trouver son style"
+          title="Choisir par"
+          accent="Texture"
+        />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 md:gap-x-6 gap-y-8">
+          {/* « Bouclé » est servi en local (voir public/images/textures/CREDITS.md) : les
+              trois autres pointent encore sur des URLs Google qui finiront par expirer. */}
           {[
             { name: "Lisse", slug: "lisse", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuBxubQU5RhI8bRCD25p6r_P5QJNuq_tzQhOf2rXOsSUHA0YQPZyw3g75A0k3D_TxdPc912kjItpmb11y438cb2YognsZBqILevEzQvH_2svSgC0rDOIBLqICODzydhQ7urdVYNAQsnr2mAEZkx7FwwyMFXKX6tUyuxN_4KFjAiCCMcH0VtHs8Qv0oJWwz5epfbVUt1-CXOCYxPovgAfAJdy_rZIlcHLEREFsiwKEGn8JbKrX1v16uZ4nklM_xOsPeO3cGn6syU-XaE" },
             { name: "Body Wave", slug: "body-wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuCCbcyZDFlEUORFmblZANwAMfCUCqOkctvG5QFcBrCOQV-nphWsF7tS20ffky6c3CvWhH-MwY9lAhxG4Mx9WFX8sDrVXcRxEy99UbwX4cq2ZfAwB3nqFjDFd76bjPOIfVDVeb8jfNtg7SwYuyT7fGR0ZgYEnAAas-huxvkHdytFje67w2b8064LnqZJ1ymKw6DSATRGodGcXyxaSGqk1BkAxekXOFYgdtoVUSvdEGBMvuN8NHYVJJsLrvxsE9M66QripwgSxnmpoKs" },
-            { name: "Bouclé", slug: "boucle", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuD60WEnVX-_yLSvBntPn9HrU1nMVF-gv9xPTRec1w6rXpr4rqxeI66WP2DFiBaYoulS2wO6R1uIRVXSB1rN_Pj5mbPzb303zLNDW2PMgXnyrLTWDMKLMvhBx22vlId7Jw9fQbhcsxLH7jR3S1tDLkN-zul8kq20lL6nk1BFRFurGFVrK-hXpavqiXVgAlhe7fVFC3PbQwTq9v59NgUOuZ3JIP-wvjMwOaXo_uciqMIP9hB2rhSlCzIgco_KjJbOZGb9ivAfYQEmlXA" },
+            { name: "Bouclé", slug: "boucle", img: "/images/textures/boucle.jpg" },
             { name: "Water Wave", slug: "water-wave", img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU" },
-          ].map((cat) => (
-            <Link to={`/boutique?texture=${cat.slug}`} key={cat.name} className="text-center group cursor-pointer">
-              <div className="aspect-square rounded-full overflow-hidden mb-4 border-2 border-transparent group-hover:border-primary transition-all p-1">
-                <img alt={cat.name} className="w-full h-full object-cover rounded-full" src={cat.img} />
+          ].map((cat, i) => (
+            <Link to={`/boutique?texture=${cat.slug}`} key={cat.name} className="group relative block">
+              <div className="relative aspect-[3/4] overflow-hidden bg-surface-container">
+                <img alt={cat.name} loading="lazy" src={cat.img} className="absolute inset-0 w-full h-full object-cover ddm-zoom" />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent" />
+                <div className="absolute inset-x-5 bottom-5 text-white">
+                  <span className="font-sans text-[11px] font-bold tabular-nums tracking-[0.2em] text-white/60">
+                    {String(i + 1).padStart(2, "0")}
+                  </span>
+                  <h3 className="font-serif text-2xl md:text-3xl leading-tight mt-1">{cat.name}</h3>
+                </div>
               </div>
-              <h4 className="font-label-md text-label-md">{cat.name}</h4>
             </Link>
           ))}
         </div>
       </section>
 
-      {/* VIP Insider Reward */}
-      <section className="mt-section-gap-desktop bg-surface-container-high py-section-gap-desktop relative overflow-hidden">
-        <div className="max-w-container-max-width mx-auto px-grid-margin-desktop text-center relative z-10">
-          <div className="flex justify-center mb-8">
-            <div className="w-20 h-20 rounded-full bg-primary/10 border-2 border-primary/30 flex items-center justify-center rotate-[-5deg] hover:rotate-0 transition-transform">
-              <span className="material-symbols-outlined text-primary text-4xl" style={{ fontVariationSettings: "'FILL' 1" }}>loyalty</span>
+      {/* Cercle privé VIP */}
+      <section className="mt-section-gap-desktop bg-surface-container-high py-section-gap-desktop">
+        <div className="max-w-container-max-width mx-auto px-grid-margin-desktop">
+          <div className="ddm-rule mb-10" />
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-20 items-start">
+            <div>
+              <p className="ddm-eyebrow mb-4">Cercle privé</p>
+              <h2 className="font-serif text-on-surface text-4xl md:text-5xl xl:text-6xl leading-[0.95] tracking-[-0.02em]">
+                <span className="block">Dix pour cent,</span>
+                <span className="block italic text-primary">et les arrivages avant tout le monde.</span>
+              </h2>
+            </div>
+            <div className="lg:pt-4">
+              <p className="font-body-lg text-on-surface-variant mb-8">
+                Guides de style exclusifs, alertes de nouveaux arrivages, et{" "}
+                <span className="font-bold text-primary">10 % de réduction</span> sur votre première commande.
+              </p>
+              <NewsletterSignup />
+              <p className="mt-5 text-[11px] text-on-surface-variant/60 font-label-md">
+                En vous inscrivant, vous acceptez notre <Link to="/confidentialite" className="underline">politique de confidentialité</Link>.
+              </p>
             </div>
           </div>
-          <h2 className="font-headline-lg text-headline-lg text-on-surface mb-6 italic">Rejoignez le Cercle Privé VIP</h2>
-          <p className="font-body-lg text-on-surface-variant max-w-2xl mx-auto mb-10">
-            Inscrivez-vous pour recevoir des guides de style exclusifs, des alertes de nouveaux arrivages et recevez <span className="font-bold text-primary">10% de réduction</span> sur votre première commande premium.
-          </p>
-          <NewsletterSignup />
-          <p className="mt-6 text-[11px] text-on-surface-variant/60 font-label-md">En vous inscrivant, vous acceptez notre <Link to="/confidentialite" className="underline">politique de confidentialité</Link>.</p>
         </div>
       </section>
 
+    </>
+  );
+}
+
+/**
+ * En-tête de section du registre éditorial : filet, sur-titre, gros titre serif
+ * dont le second mot bascule en italique coloré, lien aligné à droite.
+ */
+function SectionHead({ eyebrow, title, accent, link }: {
+  eyebrow: string;
+  title: string;
+  accent: string;
+  link?: { to: string; label: string };
+}) {
+  return (
+    <>
+      <div className="ddm-rule mb-8" />
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-5 mb-10 md:mb-12">
+        <div className="min-w-0">
+          <p className="ddm-eyebrow mb-4">{eyebrow}</p>
+          <h2 className="font-serif text-on-surface text-4xl md:text-5xl xl:text-6xl leading-[0.95] tracking-[-0.02em]">
+            <span className="block">{title}</span>
+            <span className="block italic text-primary">{accent}</span>
+          </h2>
+        </div>
+        {link && (
+          <Link to={link.to}
+            className="shrink-0 inline-flex items-center gap-2 font-sans text-sm font-bold uppercase tracking-wider text-on-surface border-b-2 border-primary pb-1 hover:text-primary transition-colors">
+            {link.label}
+            <span className="material-symbols-outlined text-base">arrow_forward</span>
+          </Link>
+        )}
+      </div>
     </>
   );
 }
@@ -467,7 +505,7 @@ const SLIDES = [
     subtitle: "Perruques en cheveux humains 100% — sélectionnées pour la femme moderne, livrées à Montréal.",
     cta: { label: "Découvrir la boutique", to: "/boutique" },
     cta2: { label: "Nous contacter", to: "/contact" },
-    img: "https://lh3.googleusercontent.com/aida/AP1WRLvgOP7GaYVKdb8rCQb9YTruiab11rrps-I_BpwRBuPJ0WmDOm6aXcAzsPkEdc3Y_iEylSp3ZhwRrzSAz0RZXCx_TS9g5y0SyW1xruxzOuH_zxvKZkqyObh0wQnCpZUBLOoHBv5PhFUuMgN-Gt3itdtP6Jr0RVz92GKuzKy6UmiVrascDDNHQHGZs2MLEdopMCXF7MmFlJalhMC5CNLP7HnKvqbof6uzcBEDkFJ1Gf6ASM-Z08JzxBlu-3Y",
+    img: "https://lh3.googleusercontent.com/aida-public/AB6AXuAY7uaxRnoYo0XebGu4c2gFUG9vOhW_gtOeGGYTeUpOfskjs-B0bR3vtiQf9KBBNjn_ASYUVyTGI2Ao61G6L2jM3vBOaWTymc8op5GMptCg-nRmIbq4-VmbBRwtKPL2g0fuHcjGW7nt9WQ610pDNHrLb0sY4df0OO7x1GESVzyXfwat1I2zRGfcEvWjs6-yVxhH6sfVViLUsBrr1JSOq2vaMtE3wW2RLMhBPIpJMIQJtxdy6TtGM5Xf-VrcJfnq_-K5WcNA4NymnxU",
     gradient: "to right",
   },
   {
@@ -603,11 +641,11 @@ function HeroCarousel() {
               </div>
 
               {/* Titre */}
-              <h1 className="font-serif text-white leading-[1.05] mb-6">
-                <span className="block text-5xl md:text-6xl lg:text-7xl ddm-fade-up" style={{ animationDelay: "80ms" }}>
+              <h1 className="font-serif text-white leading-[0.92] tracking-[-0.02em] mb-7">
+                <span className="block text-[3.5rem] md:text-7xl lg:text-8xl xl:text-[6.5rem] ddm-fade-up" style={{ animationDelay: "80ms" }}>
                   {slide.title[0]}
                 </span>
-                <span className="block text-5xl md:text-6xl lg:text-7xl italic text-primary-fixed ddm-fade-up" style={{ animationDelay: "160ms" }}>
+                <span className="block text-[3.5rem] md:text-7xl lg:text-8xl xl:text-[6.5rem] italic text-primary-fixed ddm-fade-up" style={{ animationDelay: "160ms" }}>
                   {slide.title[1]}
                 </span>
               </h1>

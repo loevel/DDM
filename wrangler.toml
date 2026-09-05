@@ -17,6 +17,11 @@ bucket_name = "ddm-wigs-assets"
 binding = "CACHE"
 id = "5927b4f2125d40af8892a7edf81f4802"
 
+# Workers AI — assistant de rédaction du blog (/admin/blog).
+# Aucune clé à gérer : facturé sur le compte Cloudflare (quota gratuit quotidien).
+[ai]
+binding = "AI"
+
 [vars]
 ENVIRONMENT = "production"
 CF_ACCOUNT_ID = "d58014fa11833876c245e4828ab1cc8a"
@@ -39,6 +44,9 @@ bucket_name = "ddm-wigs-assets"
 [[env.preview.kv_namespaces]]
 binding = "CACHE"
 id = "5927b4f2125d40af8892a7edf81f4802"
+
+[env.preview.ai]
+binding = "AI"
 
 [env.preview.vars]
 ENVIRONMENT = "preview"

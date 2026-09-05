@@ -79,6 +79,7 @@ const NAV = [
   { to: "/admin/cartes-cadeaux", label: "Cartes cadeaux", icon: "card_giftcard" },
 
   { section: "Contenu" },
+  { to: "/admin/blog",         label: "Le Journal",     icon: "article" },
   { to: "/admin/annonces",     label: "Annonces",       icon: "campaign" },
 
   { section: "Marketing" },

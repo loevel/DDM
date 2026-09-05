@@ -12,6 +12,7 @@ declare global {
     DB: D1Database;
     CACHE: KVNamespace;
     MEDIA: R2Bucket;
+    AI: Ai;
     EMAIL: SendEmail;
     // Config vars
     ENVIRONMENT: string;

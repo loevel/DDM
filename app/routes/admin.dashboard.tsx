@@ -103,7 +103,7 @@ function RevenueChart({ data }: { data: { day: string; revenue: number; orders: 
         const showLabel = i === 0 || i === 14 || i === 29 || Number(label) % 5 === 0;
         return (
           <g key={d.day}>
-            <rect x={x} y={y} width={barW} height={barH} fill="var(--color-primary)" opacity={d.revenue > 0 ? 0.8 : 0.15} rx={2}>
+            <rect x={x} y={y} width={barW} height={barH} className="fill-primary" opacity={d.revenue > 0 ? 0.8 : 0.15} rx={2}>
               <title>{d.day} — {d.revenue.toFixed(2)} $ · {d.orders} cmd</title>
             </rect>
             {showLabel && (
