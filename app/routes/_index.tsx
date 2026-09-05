@@ -346,13 +346,13 @@ export default function Index() {
           accent="Texture"
         />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 md:gap-x-6 gap-y-8">
-          {/* « Bouclé » est servi en local (voir public/images/textures/CREDITS.md) : les
-              trois autres pointent encore sur des URLs Google qui finiront par expirer. */}
+          {/* Une vraie photo par texture : la tuile doit montrer ce que la cliente
+              va recevoir. Provenance dans public/images/CREDITS.md. */}
           {[
-            { name: "Lisse", slug: "lisse", img: "/images/site/perruque-brune-lisse.webp" },
-            { name: "Body Wave", slug: "body-wave", img: "/images/site/cheveux-ondules-blond.webp" },
-            { name: "Bouclé", slug: "boucle", img: "/images/textures/boucle.jpg" },
-            { name: "Water Wave", slug: "water-wave", img: "/images/site/cheveux-caramel.webp" },
+            { name: "Lisse", slug: "lisse", img: "/images/textures/lisse.webp" },
+            { name: "Body Wave", slug: "body-wave", img: "/images/textures/body-wave.webp" },
+            { name: "Bouclé", slug: "boucle", img: "/images/textures/boucle.webp" },
+            { name: "Water Wave", slug: "water-wave", img: "/images/textures/water-wave.webp" },
           ].map((cat, i) => (
             <Link to={`/boutique?texture=${cat.slug}`} key={cat.name} className="group relative block">
               <div className="relative aspect-[3/4] overflow-hidden bg-surface-container">

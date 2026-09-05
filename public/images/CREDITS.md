@@ -14,11 +14,21 @@ images générées par IA dont aucune ne montrait une femme portant une perruque
 | `site/boucle-volume.webp` | 3 — Bouclé naturel | [Pexels 31987393](https://www.pexels.com/photo/31987393/) | Ana Melo | [Licence Pexels](https://www.pexels.com/license/) |
 | `site/glueless-sourire.webp` | 4 — Posée en 5 min | [Pexels 19763292](https://www.pexels.com/photo/19763292/) | kehinde solomon o ogunsanya | [Licence Pexels](https://www.pexels.com/license/) |
 
+Les quatre tuiles « Choisir par texture », juste en dessous, ont le même
+historique : trois montraient des visuels IA sans rapport avec la texture
+annoncée — « Water Wave » affichait un à-plat de brosses.
+
+| Fichier | Tuile | Source | Auteur | Licence |
+|---|---|---|---|---|
+| `textures/lisse.webp` | Lisse | [Pexels 18348405](https://www.pexels.com/photo/18348405/) | The Feligrapher | [Licence Pexels](https://www.pexels.com/license/) |
+| `textures/body-wave.webp` | Body Wave | [Pexels 14472217](https://www.pexels.com/photo/14472217/) | El gringo photo | [Licence Pexels](https://www.pexels.com/license/) |
+| `textures/boucle.webp` | Bouclé | [Pexels 8377218](https://www.pexels.com/photo/woman-touching-her-curly-hair-8377218/) | PNW Production | [Licence Pexels](https://www.pexels.com/license/) |
+| `textures/water-wave.webp` | Water Wave | [Pexels 13664457](https://www.pexels.com/photo/13664457/) | Omotaiyewoo | [Licence Pexels](https://www.pexels.com/license/) |
+
 Autres visuels sourcés :
 
 | Fichier | Source | Auteur | Licence |
 |---|---|---|---|
-| `textures/boucle.jpg` | [Pexels 8377218](https://www.pexels.com/photo/woman-touching-her-curly-hair-8377218/) | PNW Production | [Licence Pexels](https://www.pexels.com/license/) |
 | `textures/entretien.jpg` | [Pexels 5240709](https://www.pexels.com/photo/5240709/) | Karola G. (kaboompics.com) | [Licence Pexels](https://www.pexels.com/license/) |
 
 La licence Pexels autorise l'usage commercial et n'exige pas d'attribution ;
@@ -57,7 +67,21 @@ site. Les deux sont volontairement liés — la diapo 1 est la vitrine du site.
 `boucle-volume.webp` est plus lourde que les autres à qualité égale : la photo est
 un plan rapproché de boucles, donc riche en détail fin sur toute la surface, là où
 les trois autres ont de larges aplats de fond.
-- **`textures/boucle.jpg`** — recadré en 3:4 (900×1200) pour la tuile « Bouclé » de l'accueil.
+### Les quatre tuiles de texture
+
+Toutes recadrées en **3:4, 720×960, WebP q82** — la tuile s'affiche à ~330 px de
+large, 720 couvre le retina 2× avec de la marge. Elles sont en `loading="lazy"`,
+donc hors du chemin critique du premier affichage.
+
+| Fichier | Poids | Cadrage |
+|---|---|---|
+| `textures/lisse.webp` | 25 Ko | ancré à 30 % de la hauteur, pour la chute complète des cheveux |
+| `textures/body-wave.webp` | 79 Ko | ancré à 30 %, la cascade de vagues occupe toute la tuile |
+| `textures/boucle.webp` | 73 Ko | inchangé — c'était déjà la bonne photo, simplement réencodée (165 Ko en JPEG) |
+| `textures/water-wave.webp` | 84 Ko | ancré à 70 % et resserré ×1,25 : au cadrage large, la moitié haute n'était que du mur rose |
+
+`lisse.webp` est bien plus légère à qualité égale : cheveux lisses sur fond uni,
+peu de détail fin, là où les trois autres sont des matières ondulées ou bouclées.
 - **`textures/entretien.jpg`** — recadré en 16:9 (1600×900), ancré en haut de la source
   portrait pour cadrer la chevelure et non l'épaule. Sert le bloc « Préserver votre
   investissement » de `/boutique` et le fond décoratif de `/accessoires` — il remplace
