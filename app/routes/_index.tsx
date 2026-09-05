@@ -523,7 +523,11 @@ const SLIDES = [
     subtitle: "Des textures authentiques qui respirent et bougent comme vos propres cheveux.",
     cta: { label: "Explorer les textures", to: "/boutique?texture=boucle" },
     cta2: { label: "Guide d'entretien", to: "/guide-entretien" },
-    img: "/images/site/presentoirs-boutique.webp",
+    img: "/images/site/boucle-volume.webp",
+    // Le sujet est composé à droite pour dégager le bloc de texte. Sans ce
+    // cadrage, `object-cover` centre l'image et le visage sort du champ sur
+    // mobile, où la fenêtre visible ne fait plus qu'un quart de la largeur.
+    focus: "74% center",
     gradient: "to right",
   },
   {
@@ -616,6 +620,7 @@ function HeroCarousel() {
             <img
               key={i === current ? `active-${animKey}` : i}
               src={s.img} alt=""
+              style={{ objectPosition: "focus" in s ? s.focus : "center" }}
               className={`absolute inset-0 w-full h-full object-cover ${i === current ? "ddm-kenburns" : ""}`}
             />
             {/* Gradient overlay */}
