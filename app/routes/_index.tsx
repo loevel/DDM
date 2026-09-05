@@ -10,7 +10,7 @@ import type { Product } from "~/lib/db.server";
 const BASE = "https://ddmwigs.com";
 const SITE_DESC = "Perruques en cheveux humains 100% — Lace front, HD lace, glueless. Livraison rapide au Canada. DDM Wigs & More, Montréal.";
 // Image du hero — utilisée pour les partages sociaux (og:image)
-const OG_IMAGE = `${BASE}/images/site/cheveux-caramel.webp`;
+const OG_IMAGE = `${BASE}/images/site/elegance-afro.webp`;
 
 export const meta: MetaFunction = () => [
   { title: "DDM Wigs & More | Perruques Cheveux Humains — Montréal" },
@@ -346,13 +346,13 @@ export default function Index() {
           accent="Texture"
         />
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-x-4 md:gap-x-6 gap-y-8">
-          {/* « Bouclé » est servi en local (voir public/images/textures/CREDITS.md) : les
-              trois autres pointent encore sur des URLs Google qui finiront par expirer. */}
+          {/* Une vraie photo par texture : la tuile doit montrer ce que la cliente
+              va recevoir. Provenance dans public/images/CREDITS.md. */}
           {[
-            { name: "Lisse", slug: "lisse", img: "/images/site/perruque-brune-lisse.webp" },
-            { name: "Body Wave", slug: "body-wave", img: "/images/site/cheveux-ondules-blond.webp" },
-            { name: "Bouclé", slug: "boucle", img: "/images/textures/boucle.jpg" },
-            { name: "Water Wave", slug: "water-wave", img: "/images/site/cheveux-caramel.webp" },
+            { name: "Lisse", slug: "lisse", img: "/images/textures/lisse.webp" },
+            { name: "Body Wave", slug: "body-wave", img: "/images/textures/body-wave.webp" },
+            { name: "Bouclé", slug: "boucle", img: "/images/textures/boucle.webp" },
+            { name: "Water Wave", slug: "water-wave", img: "/images/textures/water-wave.webp" },
           ].map((cat, i) => (
             <Link to={`/boutique?texture=${cat.slug}`} key={cat.name} className="group relative block">
               <div className="relative aspect-[3/4] overflow-hidden bg-surface-container">
@@ -498,6 +498,11 @@ function NewsletterSignup() {
 
 // ─── Hero Carousel ──────────────────────────────────────────────────────────
 
+// Chaque visuel est composé avec le sujet à droite pour dégager le bloc de
+// texte, qui s'arrête à 54 % de la largeur sur un écran 1920. `focus` reporte
+// cette position en `object-position` : sans lui, `object-cover` centre l'image
+// et le visage sort du champ sur mobile, où la fenêtre visible ne fait plus
+// qu'un quart de la largeur. Provenance des photos : public/images/CREDITS.md.
 const SLIDES = [
   {
     tag: "Nouvelle Collection",
@@ -505,7 +510,8 @@ const SLIDES = [
     subtitle: "Perruques en cheveux humains 100% — sélectionnées pour la femme moderne, livrées à Montréal.",
     cta: { label: "Découvrir la boutique", to: "/boutique" },
     cta2: { label: "Nous contacter", to: "/contact" },
-    img: "/images/site/cheveux-caramel.webp",
+    img: "/images/site/elegance-afro.webp",
+    focus: "74% center",
     gradient: "to right",
   },
   {
@@ -514,7 +520,8 @@ const SLIDES = [
     subtitle: "Profitez de nos promotions limitées — dentelle invisible, rendu naturel exceptionnel.",
     cta: { label: "Voir les promotions", to: "/promotions" },
     cta2: { label: "Toute la collection", to: "/boutique" },
-    img: "/images/site/cheveux-ondules-blond.webp",
+    img: "/images/site/hd-lace-lisse.webp",
+    focus: "77% center",
     gradient: "to right",
   },
   {
@@ -523,7 +530,8 @@ const SLIDES = [
     subtitle: "Des textures authentiques qui respirent et bougent comme vos propres cheveux.",
     cta: { label: "Explorer les textures", to: "/boutique?texture=boucle" },
     cta2: { label: "Guide d'entretien", to: "/guide-entretien" },
-    img: "/images/site/presentoirs-boutique.webp",
+    img: "/images/site/boucle-volume.webp",
+    focus: "74% center",
     gradient: "to right",
   },
   {
@@ -532,7 +540,8 @@ const SLIDES = [
     subtitle: "Nos perruques glueless prêtes à porter — sans colle, sans effort, sans compromis sur le style.",
     cta: { label: "Voir les glueless", to: "/boutique?glueless=1" },
     cta2: { label: "Body Wave", to: "/boutique?texture=body-wave" },
-    img: "/images/site/perruque-brune-lisse.webp",
+    img: "/images/site/glueless-sourire.webp",
+    focus: "74% center",
     gradient: "to right",
   },
 ];
@@ -616,6 +625,7 @@ function HeroCarousel() {
             <img
               key={i === current ? `active-${animKey}` : i}
               src={s.img} alt=""
+              style={{ objectPosition: s.focus }}
               className={`absolute inset-0 w-full h-full object-cover ${i === current ? "ddm-kenburns" : ""}`}
             />
             {/* Gradient overlay */}
