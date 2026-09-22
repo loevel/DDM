@@ -18,6 +18,7 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const url = new URL(request.url);
   const status = url.searchParams.get("status") ?? "all";
   const search = url.searchParams.get("q") ?? "";

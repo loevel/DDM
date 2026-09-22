@@ -26,7 +26,8 @@ interface Ambassador {
   created_at: string;
 }
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
 
   const [ambassadors, sales, stats, enabled] = await Promise.all([

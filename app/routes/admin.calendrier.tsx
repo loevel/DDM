@@ -34,7 +34,8 @@ function buildAnnouncementText(event: CalEvent) {
   return `${event.emoji} ${event.name}${suffix}`;
 }
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const today = new Date().toISOString().slice(0, 10);
 

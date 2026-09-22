@@ -7,6 +7,7 @@ import { contactReplyEmail, sendEmail } from "~/lib/email.server";
 export const meta: MetaFunction = () => [{ title: "Clients — Admin DDM" }];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const url = new URL(request.url);
   const tab = url.searchParams.get("tab") ?? "clients";
   const search = url.searchParams.get("q") ?? "";

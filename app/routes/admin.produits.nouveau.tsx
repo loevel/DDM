@@ -7,7 +7,8 @@ import { requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Nouveau produit — Admin DDM" }];
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const { results } = await db.prepare("SELECT id, nom FROM fournisseurs ORDER BY nom ASC").all<{ id: number; nom: string }>().catch(() => ({ results: [] as { id: number; nom: string }[] }));
   return json({ fournisseurs: results ?? [] });

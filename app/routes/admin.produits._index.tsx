@@ -1,11 +1,12 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useLoaderData, useSearchParams } from "@remix-run/react";
-import { getAdminUser, logAdminAction } from "~/lib/admin-session.server";
+import { getAdminUser, logAdminAction, requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Produits — Admin DDM" }];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const url = new URL(request.url);
   const famille = url.searchParams.get("famille") ?? "";
   const search = url.searchParams.get("q") ?? "";

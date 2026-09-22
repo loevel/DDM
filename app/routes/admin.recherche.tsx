@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useLoaderData } from "@remix-run/react";
 import { useEffect, useRef } from "react";
 import { cfImage } from "~/lib/images";
+import { requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Recherche — Admin DDM" }];
 
@@ -17,6 +18,7 @@ const STATUS_FR: Record<string, string> = {
 };
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const url = new URL(request.url);
   const q = url.searchParams.get("q")?.trim() ?? "";

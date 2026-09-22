@@ -16,6 +16,7 @@ const STATUTS: Record<string, { label: string; color: string }> = {
 };
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const statut = new URL(request.url).searchParams.get("statut") ?? "";
 

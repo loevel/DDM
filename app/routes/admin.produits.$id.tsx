@@ -3,12 +3,13 @@ import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remi
 import { Form, Link, useActionData, useFetcher, useLoaderData, useNavigation } from "@remix-run/react";
 import { useState } from "react";
 import { ProduitFormFields, VariantsEditor } from "./admin.produits.nouveau";
-import { getAdminUser, logAdminAction } from "~/lib/admin-session.server";
+import { getAdminUser, logAdminAction, requireAdmin } from "~/lib/admin-session.server";
 import type { MediaItem, VariantRow } from "./admin.produits.nouveau";
 
 export const meta: MetaFunction = () => [{ title: "Modifier produit — Admin DDM" }];
 
-export async function loader({ params, context }: LoaderFunctionArgs) {
+export async function loader({ request, params, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
 
   const [product, allCollections, productCollections, media, variantsResult, fournisseursResult] = await Promise.all([

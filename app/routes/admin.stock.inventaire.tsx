@@ -6,6 +6,7 @@ import { requireAdmin } from "~/lib/admin-session.server";
 export const meta: MetaFunction = () => [{ title: "Inventaire physique — Admin DDM" }];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const url = new URL(request.url);
   const inventaireId = url.searchParams.get("id");

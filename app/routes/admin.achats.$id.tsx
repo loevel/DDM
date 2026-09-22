@@ -12,7 +12,8 @@ const STATUT_LABELS: Record<string, string> = {
   recue: "Reçue complète", annulee: "Annulée",
 };
 
-export async function loader({ params, context }: LoaderFunctionArgs) {
+export async function loader({ request, params, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const commande = await db
     .prepare("SELECT * FROM commandes_fournisseurs WHERE id = ?")

@@ -7,6 +7,7 @@ import { requireAdmin } from "~/lib/admin-session.server";
 export const meta: MetaFunction = () => [{ title: "Mouvements de stock — Admin DDM" }];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const url = new URL(request.url);
   const type = url.searchParams.get("type") ?? "";
