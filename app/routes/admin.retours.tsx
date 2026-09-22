@@ -31,7 +31,8 @@ const STATUTS: Record<string, { label: string; color: string }> = {
   traite:     { label: "Traité ✓",     color: "bg-green-100 text-green-700" },
 };
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const { results: retours } = await db.prepare(`
     SELECT r.*, p.name as p_name FROM retours_clients r

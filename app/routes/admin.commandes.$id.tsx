@@ -2,7 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useLoaderData, useNavigation } from "@remix-run/react";
 import { cfImage } from "~/lib/images";
-import { getAdminUser, logAdminAction } from "~/lib/admin-session.server";
+import { getAdminUser, logAdminAction, requireAdmin } from "~/lib/admin-session.server";
 import { orderStatusEmail, sendEmail } from "~/lib/email.server";
 
 export const meta: MetaFunction = () => [{ title: "Détail commande — Admin DDM" }];
@@ -20,7 +20,8 @@ const STATUS_COLOR: Record<string, string> = {
 
 const CARRIERS = ["Purolator", "Canada Post", "Fedex", "UPS", "DHL", "Autre"];
 
-export async function loader({ params, context }: LoaderFunctionArgs) {
+export async function loader({ request, params, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const order = await db
     .prepare("SELECT * FROM orders WHERE id = ?")

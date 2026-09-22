@@ -7,7 +7,8 @@ export const meta: MetaFunction<typeof loader> = ({ data }) => [
   { title: `${(data as any)?.customer?.name ?? (data as any)?.customer?.email ?? "Client"} — Admin DDM` }
 ];
 
-export async function loader({ params, context }: LoaderFunctionArgs) {
+export async function loader({ request, params, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const id = params.id;
 

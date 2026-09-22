@@ -3,6 +3,7 @@ import { json } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useLoaderData } from "@remix-run/react";
 import { useState } from "react";
 import { getDB } from "~/lib/db.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 import { contactNotificationEmail, sendEmail } from "~/lib/email.server";
 import { verifyTurnstile } from "~/lib/turnstile.server";
 
@@ -16,16 +17,47 @@ export async function loader({ context }: LoaderFunctionArgs) {
   return json({ siteKey: siteKey ?? null });
 }
 
+/** Réponse servie aux robots : identique à un succès, pour ne rien leur apprendre. */
+const SILENT_OK = { success: true, error: null };
+
+const SUJETS_VALIDES = new Set(["", "conseil", "rendez-vous", "commande", "retour", "autre"]);
+
+const LIMITES = { nom: 120, email: 200, tel: 40, message: 4000 } as const;
+
 export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
 
-  const tsSecret = (context.cloudflare.env as any).TURNSTILE_SECRET as string | undefined;
+  const env = context.cloudflare.env as any;
+  const tsSecret = env.TURNSTILE_SECRET as string | undefined;
   if (tsSecret) {
     const token = formData.get("cf-turnstile-response") as string | null;
     const ok = await verifyTurnstile(token, tsSecret);
     if (!ok) {
       return json({ success: false, error: "Vérification de sécurité échouée. Veuillez réessayer." });
     }
+  } else if (env.TURNSTILE_SITE_KEY) {
+    // Le widget s'affiche mais rien ne vérifie le jeton : le formulaire est
+    // ouvert aux robots. Visible dans `wrangler pages deployment tail`.
+    console.error("[Contact] TURNSTILE_SECRET absent — le captcha affiché n'est PAS vérifié.");
+  }
+
+  // Piège à robots : champ invisible, jamais rempli par une humaine.
+  if (String(formData.get("site_web") ?? "").trim()) {
+    return json(SILENT_OK);
+  }
+
+  // Trois envois par heure et par IP : large pour une cliente, bloquant pour
+  // un scanner (376 soumissions en une heure le 3 septembre 2026).
+  const autorise = await checkRateLimit(context, request, {
+    name: "contact",
+    max: 3,
+    windowSeconds: 3600,
+  });
+  if (!autorise) {
+    return json({
+      success: false,
+      error: "Vous avez déjà envoyé plusieurs messages. Réessayez dans une heure ou écrivez-nous sur WhatsApp.",
+    });
   }
 
   const nom     = String(formData.get("nom")     ?? "").trim();
@@ -36,6 +68,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (!nom || !email || !message) {
     return json({ success: false, error: "Veuillez remplir tous les champs obligatoires (marqués d'un *)." });
+  }
+
+  // Un champ hors gabarit ne vient jamais du formulaire : c'est une charge
+  // injectée directement dans la requête. On l'absorbe sans rien enregistrer.
+  const horsGabarit =
+    nom.length > LIMITES.nom ||
+    email.length > LIMITES.email ||
+    tel.length > LIMITES.tel ||
+    message.length > LIMITES.message ||
+    !SUJETS_VALIDES.has(sujet) ||
+    !/^[^\s@]+@[^\s@.]+\.[^\s@]+$/.test(email);
+  if (horsGabarit) {
+    return json(SILENT_OK);
   }
 
   const db = getDB(context);
@@ -243,12 +288,18 @@ export default function Contact() {
 
                   <Form method="post" className="space-y-7">
 
+                    {/* Piège à robots — invisible et hors du parcours clavier */}
+                    <input
+                      type="text" name="site_web" tabIndex={-1} autoComplete="off"
+                      aria-hidden="true" className="hidden"
+                    />
+
                     {/* Nom complet */}
                     <div className="relative">
                       <input
                         className={INPUT_CLASS}
                         id="nom" name="nom"
-                        placeholder=" " required type="text"
+                        placeholder=" " required type="text" maxLength={120}
                         autoComplete="name"
                       />
                       <label className={`${FLOAT_LABEL} ${LABEL_DOWN}`} htmlFor="nom">
@@ -261,7 +312,7 @@ export default function Contact() {
                       <input
                         className={INPUT_CLASS}
                         id="email" name="email"
-                        placeholder=" " required type="email"
+                        placeholder=" " required type="email" maxLength={200}
                         autoComplete="email"
                       />
                       <label className={`${FLOAT_LABEL} ${LABEL_DOWN}`} htmlFor="email">
@@ -274,7 +325,7 @@ export default function Contact() {
                       <input
                         className={INPUT_CLASS}
                         id="tel" name="tel"
-                        placeholder=" " type="tel"
+                        placeholder=" " type="tel" maxLength={40}
                         autoComplete="tel"
                       />
                       <label className={`${FLOAT_LABEL} ${LABEL_DOWN}`} htmlFor="tel">
@@ -311,7 +362,7 @@ export default function Contact() {
                       <textarea
                         className={`${INPUT_CLASS} resize-none`}
                         id="message" name="message"
-                        placeholder=" " required
+                        placeholder=" " required maxLength={4000}
                         rows={4}
                       />
                       <label className={`${FLOAT_LABEL} ${LABEL_DOWN}`} htmlFor="message">

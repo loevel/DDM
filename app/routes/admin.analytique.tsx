@@ -1,12 +1,14 @@
 import { json } from "@remix-run/cloudflare";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
+import { requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Analytique — Admin DDM" }];
 
 const TAUX = 1.38;
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
 
   const { results: products } = await db.prepare(`

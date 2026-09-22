@@ -8,6 +8,7 @@ export const meta: MetaFunction = () => [{ title: "Gestion du stock — Admin DD
 const TAUX = 1.38;
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const url = new URL(request.url);
   const famille = url.searchParams.get("famille") ?? "";

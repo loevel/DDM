@@ -6,7 +6,8 @@ import { requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Fournisseurs — Admin DDM" }];
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const { results } = await db.prepare(`
     SELECT f.*, COUNT(p.id) as nb_produits

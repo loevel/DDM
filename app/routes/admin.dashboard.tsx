@@ -1,10 +1,12 @@
 import { json } from "@remix-run/cloudflare";
 import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { useLoaderData } from "@remix-run/react";
+import { requireAdmin } from "~/lib/admin-session.server";
 
 export const meta: MetaFunction = () => [{ title: "Dashboard — Admin DDM" }];
 
-export async function loader({ context }: LoaderFunctionArgs) {
+export async function loader({ request, context }: LoaderFunctionArgs) {
+  await requireAdmin(request, context);
   const db = context.cloudflare.env.DB;
   const today = new Date().toISOString().slice(0, 10);
 
