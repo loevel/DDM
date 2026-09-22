@@ -1,7 +1,7 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs, LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Form, Link, useActionData, useLoaderData, useNavigation, useSearchParams } from "@remix-run/react";
-import { requireAdmin } from "~/lib/admin-session.server";
+import { logAdminAction, requireAdmin } from "~/lib/admin-session.server";
 import { contactReplyEmail, sendEmail } from "~/lib/email.server";
 
 export const meta: MetaFunction = () => [{ title: "Clients — Admin DDM" }];
@@ -82,6 +82,18 @@ export async function action({ request, context }: ActionFunctionArgs) {
     await db.prepare("UPDATE contact_messages SET read_at = ? WHERE id = ?")
       .bind(new Date().toISOString(), messageId).run();
     return json({ ok: true, messageId });
+  }
+
+  if (intent === "delete") {
+    await db.prepare("DELETE FROM contact_messages WHERE id = ?").bind(messageId).run();
+    await logAdminAction(context, {
+      admin,
+      action: "message.delete",
+      entity: "contact_messages",
+      entityId: messageId,
+      request,
+    });
+    return json({ ok: true, deleted: true, messageId });
   }
 
   if (intent === "reply") {
@@ -323,6 +335,19 @@ function MessageCard({ m }: { m: any }) {
               </button>
             </Form>
           )}
+          <Form
+            method="post"
+            onSubmit={e => {
+              if (!confirm(`Supprimer définitivement le message de ${m.nom} ?`)) e.preventDefault();
+            }}
+          >
+            <input type="hidden" name="intent" value="delete" />
+            <input type="hidden" name="message_id" value={m.id} />
+            <button type="submit" disabled={submitting}
+              className="text-xs text-on-surface-variant hover:text-error underline underline-offset-2 disabled:opacity-50">
+              Supprimer
+            </button>
+          </Form>
         </div>
       </div>
       <p className="text-sm text-on-surface-variant leading-relaxed whitespace-pre-wrap">{m.message}</p>
