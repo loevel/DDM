@@ -6,6 +6,7 @@ import { applyPostPaymentEffects } from "~/lib/order-fulfillment.server";
 import { computeTaxes, getTaxSettings } from "~/lib/taxes.server";
 import { getCustomerId } from "~/lib/session.server";
 import { redeemableCad, pointsCostFor } from "~/lib/loyalty.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 // POST /api/checkout  { cartId, customerInfo, promoCode?, giftCardCode? }
 //   → { clientSecret, orderRef } | { paidInFull: true, orderRef }
@@ -15,6 +16,28 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   if (!stripeSecret) {
     return json({ error: "Paiement en ligne non configuré." }, { status: 503 });
+  }
+
+  // Chaque appel crée une commande, ses lignes, et un PaymentIntent Stripe —
+  // trois écritures facturées ou encombrantes, sans qu'aucun paiement ne soit
+  // encore exigé.
+  //
+  // Plafond délibérément large : une cliente légitime recommence volontiers
+  // (carte refusée, adresse à corriger), et les opérateurs mobiles placent
+  // beaucoup de monde derrière une même IP. Ici un faux positif coûte une
+  // vente, alors qu'un faux négatif ne coûte qu'une ligne de base. 20 par
+  // dix minutes arrête le martèlement depuis une adresse sans jamais gêner
+  // un panier réel.
+  const autorise = await checkRateLimit(context, request, {
+    name: "checkout",
+    max: 20,
+    windowSeconds: 600,
+  });
+  if (!autorise) {
+    return json(
+      { error: "Trop de tentatives de commande. Réessayez dans quelques minutes." },
+      { status: 429 }
+    );
   }
 
   const body = await request.json();
