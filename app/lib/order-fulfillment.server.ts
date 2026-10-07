@@ -8,12 +8,70 @@ import { debitGiftCard } from "~/lib/gift-cards.server";
 import { pointsEarnedFor, recordPoints, hasPointsTxForOrder } from "~/lib/loyalty.server";
 
 /**
+ * Marque payée la commande d'un PaymentIntent et retourne son id — mais
+ * seulement si c'est cet appel qui a obtenu la transition. Retourne null si la
+ * commande était déjà payée, ou si aucune ne correspond.
+ *
+ * Le `AND payment_status != 'paid'` est le jeton d'exclusion. Deux chemins
+ * confirment un paiement : le webhook Stripe, qui est livré « au moins une
+ * fois » et réessayé dès qu'une réponse tarde, et la page de retour 3DS. Sans
+ * jeton, `applyPostPaymentEffects` se rejouait — stock décrémenté deux fois,
+ * carte cadeau débitée deux fois, usage du code promo compté deux fois.
+ *
+ * Les deux appelants passent par ici plutôt que de porter chacun leur copie du
+ * `UPDATE` : c'est la divergence entre ces deux copies qui avait laissé le
+ * webhook sans garde.
+ */
+export async function claimOrderAsPaid(
+  db: D1Database,
+  paymentIntentId: string,
+  paymentMethod: string
+): Promise<number | null> {
+  const claim = await db
+    .prepare(`UPDATE orders SET
+      payment_status = 'paid',
+      payment_method = ?,
+      status = 'confirmed',
+      updated_at = datetime('now')
+      WHERE stripe_payment_intent_id = ? AND payment_status != 'paid'`)
+    .bind(paymentMethod, paymentIntentId)
+    .run();
+
+  if ((claim.meta?.changes ?? 0) === 0) return null;
+
+  const order = await db
+    .prepare("SELECT id FROM orders WHERE stripe_payment_intent_id = ?")
+    .bind(paymentIntentId)
+    .first<{ id: number }>();
+  return order?.id ?? null;
+}
+
+export type PostPaymentOptions = {
+  /**
+   * La carte cadeau a déjà été débitée par l'appelant. Vrai uniquement pour la
+   * commande entièrement couverte par une carte : là, le débit *est* le
+   * paiement, donc il a lieu avant la confirmation (voir api.checkout).
+   */
+  giftCardAlreadyDebited?: boolean;
+};
+
+/**
  * Applique tous les effets d'un paiement confirmé : décrément du stock et
  * mouvements de vente, décompte du code promo, débit de la carte cadeau,
- * récupération du panier abandonné, sauvegarde de l'adresse. Chaque bloc est
- * isolé — une erreur n'empêche pas les suivants (ni le webhook de répondre).
+ * récompense de parrainage, récupération du panier abandonné, sauvegarde de
+ * l'adresse. Chaque bloc est isolé — une erreur n'empêche pas les suivants
+ * (ni le webhook de répondre).
+ *
+ * N'est PAS idempotente dans son ensemble : le décrément de stock et le
+ * décompte du code promo se rejoueraient. C'est à l'appelant de n'appeler
+ * cette fonction qu'une fois, en s'appuyant sur la transition atomique de
+ * `payment_status` vers 'paid' comme jeton d'exclusion.
  */
-export async function applyPostPaymentEffects(db: D1Database, orderId: number): Promise<void> {
+export async function applyPostPaymentEffects(
+  db: D1Database,
+  orderId: number,
+  opts: PostPaymentOptions = {}
+): Promise<void> {
   const order = await db
     .prepare("SELECT id, reference, customer_email, shipping_address, promo_code, gift_card_code, gift_card_cad, ambassador_code, total_cad, tps_cad, tvq_cad, loyalty_points_redeemed FROM orders WHERE id = ?")
     .bind(orderId)
@@ -85,12 +143,47 @@ export async function applyPostPaymentEffects(db: D1Database, orderId: number): 
     }
   } catch { /* ne pas bloquer */ }
 
-  // Débiter la carte cadeau utilisée (même logique : au paiement confirmé)
+  // Débiter la carte cadeau utilisée (même logique : au paiement confirmé).
+  // Un échec signifie que le solde ne couvre plus le montant retenu au
+  // checkout — la carte a servi ailleurs entre-temps. La commande est déjà
+  // payée par carte bancaire pour le reste, on ne l'annule donc pas : on
+  // crie dans les logs pour qu'une humaine régularise.
   try {
-    if (order.gift_card_code && order.gift_card_cad > 0) {
-      await debitGiftCard(db, order.gift_card_code, order.gift_card_cad);
+    if (order.gift_card_code && order.gift_card_cad > 0 && !opts.giftCardAlreadyDebited) {
+      const debite = await debitGiftCard(db, order.gift_card_code, order.gift_card_cad);
+      if (!debite) {
+        console.error(
+          `[Commande ${order.reference}] SOLDE CARTE CADEAU INSUFFISANT : ` +
+            `${order.gift_card_cad} $ retenus sur ${order.gift_card_code}, non débités. À régulariser.`
+        );
+      }
     }
   } catch { /* ne pas bloquer */ }
+
+  // Récompenser le parrainage — 15 $ de crédit au parrain, au paiement
+  // confirmé seulement. Le checkout n'a inscrit qu'une ligne 'pending' : sans
+  // cela, une commande jamais payée créditait quand même le parrain, et il
+  // suffisait d'une adresse jetable par compte pour fabriquer du crédit.
+  // Le passage 'pending' → 'rewarded' est atomique et fait office de jeton :
+  // un webhook rejoué ne crédite pas deux fois.
+  try {
+    const referral = await db
+      .prepare("SELECT referrer_email, reward_cad FROM referrals WHERE order_reference = ? AND status = 'pending'")
+      .bind(order.reference)
+      .first<{ referrer_email: string; reward_cad: number }>();
+    if (referral) {
+      const claim = await db
+        .prepare("UPDATE referrals SET status = 'rewarded', rewarded_at = datetime('now') WHERE order_reference = ? AND status = 'pending'")
+        .bind(order.reference)
+        .run();
+      if ((claim.meta?.changes ?? 0) > 0) {
+        await db
+          .prepare("UPDATE customers SET referral_credit_cad = referral_credit_cad + ? WHERE email = ?")
+          .bind(referral.reward_cad, referral.referrer_email)
+          .run();
+      }
+    }
+  } catch { /* table absente ou colonne manquante → ignorer */ }
 
   // Créditer la commission de l'ambassadrice (au paiement confirmé seulement).
   // Base = marchandise nette (total − taxes). Idempotent : ambassador_sales a
