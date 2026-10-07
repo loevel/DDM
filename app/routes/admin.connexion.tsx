@@ -48,13 +48,17 @@ export async function action({ request, context }: ActionFunctionArgs) {
 
   const form = await request.formData();
 
-  const tsSecret = (context.cloudflare.env as any).TURNSTILE_SECRET as string | undefined;
-  if (tsSecret) {
-    const token = form.get("cf-turnstile-response") as string | null;
-    const ok = await verifyTurnstile(token, tsSecret);
-    if (!ok) {
-      return json({ error: "Vérification de sécurité échouée. Veuillez réessayer." }, { status: 400 });
-    }
+  // Un captcha mal configuré ne doit pas verrouiller l'administration : c'est
+  // ici même qu'on vient corriger la clé. Le pare-feu reste la limite de
+  // 5 tentatives par quart d'heure, plus le mot de passe.
+  const token = form.get("cf-turnstile-response") as string | null;
+  const verdict = await verifyTurnstile(
+    token,
+    (context.cloudflare.env as any).TURNSTILE_SECRET ?? "",
+    { action: "admin-connexion", request }
+  );
+  if (verdict === "refuse") {
+    return json({ error: "Vérification de sécurité échouée. Veuillez réessayer." }, { status: 400 });
   }
   const email = String(form.get("email") ?? "").trim().toLowerCase();
   const password = String(form.get("password") ?? "");
@@ -181,7 +185,7 @@ export default function AdminConnexion() {
               </div>
             )}
             {siteKey && (
-              <div className="cf-turnstile" data-sitekey={siteKey} data-theme="dark" />
+              <div className="cf-turnstile" data-sitekey={siteKey} data-action="admin-connexion" data-theme="dark" />
             )}
             <button
               type="submit"
