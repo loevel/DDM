@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import { json } from "@remix-run/cloudflare";
 import { rebuyReminderEmail, sendEmail } from "~/lib/email.server";
+import { genPromoCode } from "~/lib/promo-codes.server";
 
 const SITE_URL = "https://ddmwigs.com";
 
@@ -62,7 +63,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (!order.product_name) { skipped++; continue; }
 
     // Code privilège unique : -15 %, usage unique, valable 30 jours.
-    const code = "RETOUR" + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const code = genPromoCode("RETOUR");
     const exp = new Date(Date.now() + 30 * 24 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
     try {
       await db.prepare(

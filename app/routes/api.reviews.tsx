@@ -6,6 +6,7 @@ import { getCustomer } from "~/lib/auth.server";
 import { reviewRewardEmail, sendEmail } from "~/lib/email.server";
 import { checkRateLimit } from "~/lib/rate-limit.server";
 import { LOYALTY, recordPoints } from "~/lib/loyalty.server";
+import { genPromoCode } from "~/lib/promo-codes.server";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
@@ -100,7 +101,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
   // serait une pratique trompeuse (Loi sur la concurrence).
   if (verifiedPurchase) {
     try {
-      const code = "MERCI" + Math.random().toString(36).slice(2, 6).toUpperCase();
+      const code = genPromoCode("MERCI");
       const exp = new Date(Date.now() + 60 * 24 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
       await db
         .prepare("INSERT INTO promo_codes (code, type, value, min_order, usage_limit, active, expires_at) VALUES (?, 'percent', 10, 0, 1, 1, ?)")

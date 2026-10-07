@@ -8,6 +8,7 @@ import { getCustomerId } from "~/lib/session.server";
 import { cfImage } from "~/lib/images";
 import { checkRateLimit } from "~/lib/rate-limit.server";
 import { quizRecommendationEmail, sendEmail } from "~/lib/email.server";
+import { genPromoCode } from "~/lib/promo-codes.server";
 
 const SITE_URL = "https://ddmwigs.com";
 
@@ -162,7 +163,7 @@ async function handleCapture(
   } catch { /* colonne source absente */ }
 
   // 2. Code -10 % unique, usage unique, valable 48h
-  const code = "QUIZ" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const code = genPromoCode("QUIZ");
   const exp = new Date(Date.now() + 48 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
   try {
     await db.prepare("INSERT INTO promo_codes (code, type, value, min_order, usage_limit, active, expires_at) VALUES (?, 'percent', 10, 0, 1, 1, ?)")

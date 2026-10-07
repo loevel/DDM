@@ -1,6 +1,7 @@
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import { json } from "@remix-run/cloudflare";
 import { cartReminderEmail, sendEmail } from "~/lib/email.server";
+import { genPromoCode } from "~/lib/promo-codes.server";
 
 interface CartItem {
   name: string;
@@ -24,7 +25,7 @@ interface AbandonedCart {
 // ── Promo code helper ──────────────────────────────────────────────────────────
 async function ensurePromo(db: D1Database, id: number, existing: string | null): Promise<string> {
   if (existing) return existing;
-  const code = "RETOUR" + Math.random().toString(36).slice(2, 6).toUpperCase();
+  const code = genPromoCode("RETOUR");
   const exp = new Date(Date.now() + 72 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
   try {
     await db.prepare("INSERT INTO promo_codes (code,type,value,active,expires_at,min_order) VALUES (?,'percent',10,1,?,0)").bind(code, exp).run();

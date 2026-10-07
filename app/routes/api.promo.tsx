@@ -1,6 +1,7 @@
 import { json } from "@remix-run/cloudflare";
-import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/cloudflare";
+import type { LoaderFunctionArgs } from "@remix-run/cloudflare";
 import { getDB } from "~/lib/db.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 interface PromoCode {
   id: number;
@@ -14,7 +15,26 @@ interface PromoCode {
   expires_at: string | null;
 }
 
+/**
+ * Message unique pour tous les refus. Les quatre cas — inconnu, désactivé,
+ * expiré, épuisé — mènent la cliente à la même action, et les distinguer
+ * revenait à dire à qui devine des codes au hasard si la chaîne essayée en a
+ * déjà été un.
+ *
+ * Attention à ne pas surestimer ce changement : l'endpoint a pour métier de
+ * dire si un code est valide, donc l'oracle est irréductible pour un code
+ * valide. Ce qui l'étouffe vraiment, c'est la limite de débit ci-dessous,
+ * couplée à l'entropie des codes (voir `genPromoCode`).
+ */
+const REFUS = "Ce code n'est pas valide ou n'est plus utilisable";
+
 // GET /api/promo?code=XXX&total=YYY  → valide le code et calcule la remise
+//
+// Il n'y a volontairement pas d'`action` ici. Une route POST incrémentait
+// `used_count` sans authentification et sans lien avec une commande : rien ne
+// l'appelait, elle doublait le décompte que `applyPostPaymentEffects` fait
+// déjà au paiement confirmé, et elle permettait d'épuiser à distance la
+// réserve d'usages d'un code à diffusion limitée.
 export async function loader({ request, context }: LoaderFunctionArgs) {
   const url = new URL(request.url);
   const code = url.searchParams.get("code")?.trim();
@@ -22,19 +42,31 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
   if (!code) return json({ valid: false, error: "Code manquant" });
 
+  // Large pour une cliente (qui en essaie deux ou trois), hermétique pour
+  // l'énumération : 20 essais par dix minutes mettraient des siècles à
+  // parcourir l'espace des codes.
+  const autorise = await checkRateLimit(context, request, {
+    name: "promo",
+    max: 20,
+    windowSeconds: 600,
+  });
+  if (!autorise) {
+    return json({ valid: false, error: "Trop de tentatives. Réessayez plus tard." }, { status: 429 });
+  }
+
   const db = getDB(context);
   const promo = await db
     .prepare("SELECT * FROM promo_codes WHERE code = ? COLLATE NOCASE")
     .bind(code)
     .first<PromoCode>();
 
-  if (!promo) return json({ valid: false, error: "Code invalide" });
-  if (!promo.active) return json({ valid: false, error: "Ce code est désactivé" });
+  if (!promo) return json({ valid: false, error: REFUS });
+  if (!promo.active) return json({ valid: false, error: REFUS });
   if (promo.expires_at && new Date(promo.expires_at) < new Date()) {
-    return json({ valid: false, error: "Ce code a expiré" });
+    return json({ valid: false, error: REFUS });
   }
   if (promo.usage_limit !== null && promo.used_count >= promo.usage_limit) {
-    return json({ valid: false, error: "Ce code a atteint sa limite d'utilisation" });
+    return json({ valid: false, error: REFUS });
   }
   if (total < promo.min_order) {
     return json({
@@ -56,20 +88,4 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     finalTotal: Math.round((total - discount) * 100) / 100,
     label: promo.type === "percent" ? `-${promo.value}%` : `-${promo.value.toFixed(2)} $`,
   });
-}
-
-// POST /api/promo  → confirme l'utilisation du code (incrémente used_count)
-export async function action({ request, context }: ActionFunctionArgs) {
-  if (request.method !== "POST") return json({ error: "Method not allowed" }, { status: 405 });
-
-  const body = await request.json() as { code?: string };
-  if (!body.code) return json({ error: "Code manquant" }, { status: 400 });
-
-  const db = getDB(context);
-  await db
-    .prepare("UPDATE promo_codes SET used_count = used_count + 1 WHERE code = ? COLLATE NOCASE AND active = 1")
-    .bind(body.code)
-    .run();
-
-  return json({ ok: true });
 }

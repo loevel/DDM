@@ -2,6 +2,7 @@ import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import { json } from "@remix-run/cloudflare";
 import { getDB } from "~/lib/db.server";
 import { isAdminAuthenticated } from "~/lib/admin-session.server";
+import { genPromoCode } from "~/lib/promo-codes.server";
 
 // POST /api/abandoned-cart-action
 // { action: "remind_1"|"remind_2"|"remind_3"|"recover"|"generate_promo", cartDbId: number }
@@ -41,7 +42,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ ok: true, promoCode: cart.recovery_promo_code });
     }
     // Générer un code promo unique de 10% valable 72h
-    const code = "RETOUR" + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const code = genPromoCode("RETOUR");
     const expiresAt = new Date(Date.now() + 72 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
 
     try {

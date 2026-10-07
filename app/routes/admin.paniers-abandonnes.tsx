@@ -4,6 +4,7 @@ import { useFetcher, useLoaderData, useRevalidator } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import { isAdminAuthenticated } from "~/lib/admin-session.server";
 import { getDB } from "~/lib/db.server";
+import { genPromoCode } from "~/lib/promo-codes.server";
 
 export const meta: MetaFunction = () => [{ title: "Paniers abandonnés — Admin DDM" }];
 
@@ -117,7 +118,7 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return json({ ok: true, promoCode: existing.recovery_promo_code });
     }
 
-    const code = "RETOUR" + Math.random().toString(36).slice(2, 6).toUpperCase();
+    const code = genPromoCode("RETOUR");
     const expiresAt = new Date(Date.now() + 72 * 3600 * 1000).toISOString().replace("T", " ").slice(0, 19);
 
     try {
