@@ -28,17 +28,19 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const formData = await request.formData();
 
   const env = context.cloudflare.env as any;
-  const tsSecret = env.TURNSTILE_SECRET as string | undefined;
-  if (tsSecret) {
-    const token = formData.get("cf-turnstile-response") as string | null;
-    const ok = await verifyTurnstile(token, tsSecret);
-    if (!ok) {
-      return json({ success: false, error: "Vérification de sécurité échouée. Veuillez réessayer." });
-    }
-  } else if (env.TURNSTILE_SITE_KEY) {
-    // Le widget s'affiche mais rien ne vérifie le jeton : le formulaire est
-    // ouvert aux robots. Visible dans `wrangler pages deployment tail`.
-    console.error("[Contact] TURNSTILE_SECRET absent — le captcha affiché n'est PAS vérifié.");
+  const token = formData.get("cf-turnstile-response") as string | null;
+  const verdict = await verifyTurnstile(token, env.TURNSTILE_SECRET ?? "", {
+    action: "contact",
+    request,
+  });
+  if (verdict === "refuse") {
+    return json({ success: false, error: "Vérification de sécurité échouée. Veuillez réessayer." });
+  }
+  if (verdict === "non-configure" && env.TURNSTILE_SITE_KEY) {
+    // Le widget s'affiche mais rien ne le vérifie : le formulaire ne tient
+    // plus que sur la limite par IP et le champ piège. Visible dans
+    // `wrangler pages deployment tail`.
+    console.error("[Contact] captcha non vérifié — voir le message Turnstile ci-dessus.");
   }
 
   // Piège à robots : champ invisible, jamais rempli par une humaine.
@@ -371,7 +373,7 @@ export default function Contact() {
                     </div>
 
                     {siteKey && (
-                      <div className="cf-turnstile" data-sitekey={siteKey} />
+                      <div className="cf-turnstile" data-sitekey={siteKey} data-action="contact" />
                     )}
                     <button
                       type="submit"
