@@ -1,7 +1,7 @@
 import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import Stripe from "stripe";
-import { getActiveGiftCard } from "~/lib/gift-cards.server";
+import { debitGiftCard, getActiveGiftCard } from "~/lib/gift-cards.server";
 import { applyPostPaymentEffects } from "~/lib/order-fulfillment.server";
 import { computeTaxes, getTaxSettings } from "~/lib/taxes.server";
 import { getCustomerId } from "~/lib/session.server";
@@ -272,16 +272,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
     } catch { /* non bloquant */ }
   }
 
-  // Enregistrer le parrainage et créditer le parrain
+  // Enregistrer le parrainage en attente. Le crédit de 15 $ au parrain est
+  // versé par applyPostPaymentEffects, au paiement confirmé — jamais ici :
+  // la commande n'est encore que `pending`, et une commande abandonnée ne
+  // doit rien rapporter. C'est la même règle que la commission ambassadrice.
   if (referrerEmail) {
     try {
       await db.prepare(
-        "INSERT INTO referrals (referrer_email, referred_email, code, status, reward_cad, discount_cad, order_reference, rewarded_at) VALUES (?,?,?,?,?,?,?,datetime('now'))"
-      ).bind(referrerEmail, customerInfo.email.trim().toLowerCase(), referralCode!.toUpperCase(), "rewarded", 15, 10, ref).run();
-      await db.prepare(
-        "UPDATE customers SET referral_credit_cad = referral_credit_cad + 15 WHERE email = ?"
-      ).bind(referrerEmail).run();
-    } catch { /* ignorer silencieusement */ }
+        "INSERT INTO referrals (referrer_email, referred_email, code, status, reward_cad, discount_cad, order_reference) VALUES (?,?,?,?,?,?,?)"
+      ).bind(referrerEmail, customerInfo.email.trim().toLowerCase(), referralCode!.toUpperCase(), "pending", 15, 10, ref).run();
+    } catch { /* code déjà consommé (UNIQUE) ou table absente */ }
   }
 
   const breakdown = {
@@ -297,13 +297,28 @@ export async function action({ request, context }: ActionFunctionArgs) {
     toPay: chargeCad,
   };
 
-  // Commande entièrement couverte par la carte cadeau : aucun paiement Stripe
+  // Commande entièrement couverte par la carte cadeau : aucun paiement Stripe.
+  // Le débit a lieu AVANT la confirmation et c'est lui qui l'autorise — ici il
+  // tient le rôle du paiement. Sur deux requêtes simultanées avec la même
+  // carte, une seule obtient le débit ; l'autre repart sans commande plutôt
+  // qu'avec de la marchandise gratuite.
   if (chargeCad === 0) {
+    const debite = validGiftCode ? await debitGiftCard(db, validGiftCode, giftCad) : false;
+    if (!debite) {
+      await db
+        .prepare("UPDATE orders SET payment_status = 'failed', status = 'cancelled', updated_at = datetime('now') WHERE id = ?")
+        .bind(order.id)
+        .run();
+      return json(
+        { error: "Le solde de la carte cadeau ne couvre plus cette commande. Rechargez la page et réessayez." },
+        { status: 409 }
+      );
+    }
     await db
       .prepare("UPDATE orders SET payment_status = 'paid', payment_method = 'gift_card', status = 'confirmed', updated_at = datetime('now') WHERE id = ?")
       .bind(order.id)
       .run();
-    await applyPostPaymentEffects(db, order.id);
+    await applyPostPaymentEffects(db, order.id, { giftCardAlreadyDebited: true });
     return json({ paidInFull: true, orderRef: ref, breakdown });
   }
 

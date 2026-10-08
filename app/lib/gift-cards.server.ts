@@ -55,12 +55,31 @@ export async function getActiveGiftCard(
   return card;
 }
 
-/** Débite le solde (plancher à 0) — appelé au paiement confirmé seulement. */
-export async function debitGiftCard(db: D1Database, code: string, amountCad: number): Promise<void> {
-  await db
+/**
+ * Débite le solde. Retourne `true` si le débit a eu lieu, `false` si le solde
+ * était insuffisant (ou le code inconnu) — dans ce cas rien n'est modifié.
+ *
+ * Le `WHERE balance_cad >= ?` n'est pas une ceinture de sécurité, c'est le
+ * verrou : il fait du débit une opération atomique qui ne peut réussir qu'une
+ * fois pour un solde donné. Sans lui, deux requêtes simultanées lisaient le
+ * même solde, se croyaient toutes deux couvertes, et dépensaient deux fois la
+ * même carte — l'ancien `MAX(0, solde - montant)` masquait le dépassement en
+ * ramenant simplement le solde à zéro.
+ *
+ * L'appelant DOIT regarder la valeur de retour.
+ */
+export async function debitGiftCard(
+  db: D1Database,
+  code: string,
+  amountCad: number
+): Promise<boolean> {
+  if (!(amountCad > 0)) return false;
+  const res = await db
     .prepare(
-      "UPDATE gift_cards SET balance_cad = MAX(0, ROUND(balance_cad - ?, 2)), updated_at = datetime('now') WHERE code = ?"
+      `UPDATE gift_cards SET balance_cad = ROUND(balance_cad - ?, 2), updated_at = datetime('now')
+       WHERE code = ? AND balance_cad >= ?`
     )
-    .bind(amountCad, code)
+    .bind(amountCad, code.trim().toUpperCase(), amountCad)
     .run();
+  return (res.meta?.changes ?? 0) > 0;
 }

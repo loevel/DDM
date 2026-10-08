@@ -3,6 +3,7 @@ import type { LoaderFunctionArgs, MetaFunction } from "@remix-run/cloudflare";
 import { Link, useLoaderData } from "@remix-run/react";
 import { useEffect } from "react";
 import Stripe from "stripe";
+import { applyPostPaymentEffects, claimOrderAsPaid } from "~/lib/order-fulfillment.server";
 
 export const meta: MetaFunction = () => [{ title: "Commande confirmée — DDM Wigs & More" }];
 
@@ -24,16 +25,16 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
 
         if (pi.status === "succeeded") {
           const db = context.cloudflare.env.DB;
-          // Le webhook va aussi passer, mais on s'assure que la commande est confirmée
-          // même si le webhook est lent ou manqué
-          await db.prepare(`
-            UPDATE orders SET
-              payment_status = 'paid',
-              payment_method = ?,
-              status = 'confirmed',
-              updated_at = datetime('now')
-            WHERE stripe_payment_intent_id = ? AND payment_status != 'paid'
-          `).bind(pi.payment_method_types?.[0] ?? "card", paymentIntentId).run();
+          // Le webhook va aussi passer, mais on s'assure que la commande est
+          // confirmée même s'il est lent ou manqué. Les deux chemins se
+          // partagent le même jeton d'exclusion : un seul gagne.
+          const orderId = await claimOrderAsPaid(db, paymentIntentId, pi.payment_method_types?.[0] ?? "card");
+
+          // Indispensable depuis que le webhook est protégé par ce jeton :
+          // sans cet appel, une page de retour plus rapide que le webhook
+          // laissait la commande payée mais jamais honorée — stock non
+          // décrémenté, carte cadeau non débitée, points non crédités.
+          if (orderId !== null) await applyPostPaymentEffects(db, orderId);
         }
       } catch {
         // Ne pas bloquer l'affichage si Stripe est momentanément indisponible

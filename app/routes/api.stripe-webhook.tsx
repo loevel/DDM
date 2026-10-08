@@ -2,7 +2,7 @@ import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import Stripe from "stripe";
 import { giftCardBuyerEmail, giftCardRecipientEmail, sendEmail } from "~/lib/email.server";
 import { createGiftCard } from "~/lib/gift-cards.server";
-import { applyPostPaymentEffects } from "~/lib/order-fulfillment.server";
+import { applyPostPaymentEffects, claimOrderAsPaid } from "~/lib/order-fulfillment.server";
 
 // POST /api/stripe-webhook  (Stripe → confirme le paiement)
 export async function action({ request, context }: ActionFunctionArgs) {
@@ -85,24 +85,16 @@ export async function action({ request, context }: ActionFunctionArgs) {
       return new Response("ok", { status: 200 });
     }
 
-    await db
-      .prepare(`UPDATE orders SET
-        payment_status = 'paid',
-        payment_method = ?,
-        status = 'confirmed',
-        updated_at = datetime('now')
-        WHERE stripe_payment_intent_id = ?`)
-      .bind(pi.payment_method_types?.[0] ?? "card", pi.id)
-      .run();
+    // Un webhook rejoué (Stripe livre « au moins une fois ») n'obtient pas le
+    // jeton, donc n'applique pas les effets une seconde fois.
+    const orderId = await claimOrderAsPaid(db, pi.id, pi.payment_method_types?.[0] ?? "card");
 
-    // Effets post-paiement (stock, promo, carte cadeau, panier, adresse)
-    try {
-      const paidOrder = await db
-        .prepare("SELECT id FROM orders WHERE stripe_payment_intent_id = ?")
-        .bind(pi.id)
-        .first<{ id: number }>();
-      if (paidOrder) await applyPostPaymentEffects(db, paidOrder.id);
-    } catch { /* ne pas bloquer le webhook */ }
+    // Effets post-paiement (stock, promo, carte cadeau, parrainage, panier, adresse)
+    if (orderId !== null) {
+      try {
+        await applyPostPaymentEffects(db, orderId);
+      } catch { /* ne pas bloquer le webhook */ }
+    }
   }
 
   if (event.type === "payment_intent.payment_failed") {
