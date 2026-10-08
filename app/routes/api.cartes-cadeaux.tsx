@@ -2,6 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import Stripe from "stripe";
 import { GIFT_CARD_MAX_CAD, GIFT_CARD_MIN_CAD } from "~/lib/gift-cards.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 // POST /api/cartes-cadeaux  { amountCad, buyerName, buyerEmail, recipientName?, recipientEmail?, message? }
 //   → { clientSecret }
@@ -14,6 +15,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
   const stripeSecret = env.STRIPE_SECRET_KEY as string | undefined;
   if (!stripeSecret) {
     return json({ error: "Paiement en ligne non configuré." }, { status: 503 });
+  }
+
+  // Chaque appel crée un PaymentIntent Stripe et une intention d'achat en
+  // base, sans paiement. Personne n'achète six cartes cadeaux en une heure.
+  const autorise = await checkRateLimit(context, request, {
+    name: "carte-cadeau",
+    max: 5,
+    windowSeconds: 3600,
+  });
+  if (!autorise) {
+    return json(
+      { error: "Trop de demandes. Réessayez dans une heure." },
+      { status: 429 }
+    );
   }
 
   const body = await request.json() as {

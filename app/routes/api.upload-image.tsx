@@ -2,6 +2,7 @@ import { json } from "@remix-run/cloudflare";
 import type { ActionFunctionArgs } from "@remix-run/cloudflare";
 import { isAdminAuthenticated } from "~/lib/admin-session.server";
 import { getCustomerId } from "~/lib/session.server";
+import { checkRateLimit } from "~/lib/rate-limit.server";
 
 // POST /api/upload-image
 // Autorisé : admin OU client connecté (upload photos d'avis)
@@ -14,6 +15,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
   if (!isAdmin) {
     const customerId = await getCustomerId(request, context as any).catch(() => null);
     if (!customerId) return json({ error: "Non autorisé" }, { status: 401 });
+
+    // Cloudflare Images est facturé à l'usage, et un compte client s'obtient
+    // avec un lien magique vers n'importe quelle boîte jetable : sans plafond,
+    // une inscription gratuite valait un droit d'écriture illimité, par
+    // tranches de 10 Mo. Dix photos d'avis par heure suffisent largement.
+    // Les admins en sont dispensées — ce sont elles qui garnissent le catalogue.
+    const autorise = await checkRateLimit(context, request, {
+      name: "upload-image",
+      max: 10,
+      windowSeconds: 3600,
+    });
+    if (!autorise) {
+      return json({ error: "Trop d'envois d'images. Réessayez dans une heure." }, { status: 429 });
+    }
   }
 
   const env = context.cloudflare.env;

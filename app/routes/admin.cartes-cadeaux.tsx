@@ -3,6 +3,7 @@ import type { ActionFunctionArgs, LoaderFunctionArgs } from "@remix-run/cloudfla
 import { Link, useFetcher, useLoaderData, useSearchParams } from "@remix-run/react";
 import { useState } from "react";
 import { isAdminAuthenticated } from "~/lib/admin-session.server";
+import { genGiftCardCode } from "~/lib/gift-cards.server";
 
 interface GiftCard {
   id: number;
@@ -15,12 +16,6 @@ interface GiftCard {
   expires_at: string | null;
   created_at: string;
   updated_at: string;
-}
-
-function genCode(): string {
-  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-  const seg = () => Array.from({ length: 4 }, () => chars[Math.floor(Math.random() * chars.length)]).join("");
-  return `DDM-${seg()}-${seg()}-${seg()}`;
 }
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -76,7 +71,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
     const amount = Number(f.get("amount_cad") ?? 0);
     if (!amount || amount <= 0) return json({ error: "Montant invalide." }, { status: 400 });
 
-    const code = String(f.get("code") ?? "").trim() || genCode();
+    // Un code de carte cadeau est au porteur : il vaut son solde pour
+    // quiconque le connaît. D'où le tirage cryptographique partagé plutôt
+    // qu'un générateur local.
+    const code = String(f.get("code") ?? "").trim() || genGiftCardCode();
     const recipientName = String(f.get("recipient_name") ?? "").trim() || null;
     const recipientEmail = String(f.get("recipient_email") ?? "").trim() || null;
     const note = String(f.get("note") ?? "").trim() || null;
